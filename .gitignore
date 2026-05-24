@@ -1,0 +1,57 @@
+# ==========================================
+# DATI E RISULTATI (Specifici del progetto)
+# ==========================================
+# Ignora i dataset pesanti
+data/
+# Ignora la cartella dei risultati, grafici e log di training
+#results/
+
+# ==========================================
+# PESI DEI MODELLI (PyTorch)
+# ==========================================
+# Ignora i file dei modelli salvati per evitare di intasare Git
+*.pt
+*.pth
+*.ckpt
+
+# ==========================================
+# AMBIENTI VIRTUALI
+# ==========================================
+# Ignora le cartelle degli ambienti Python
+venv/
+env/
+.venv/
+.conda/
+
+# ==========================================
+# PYTHON E CACHE
+# ==========================================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ==========================================
+# JUPYTER NOTEBOOK
+# ==========================================
+# Ignora i salvataggi automatici nascosti dei notebook
+.ipynb_checkpoints/
+
+# ==========================================
+# IDE (Editor di codice)
+# ==========================================
+# Se usi Visual Studio Code
+.vscode/
+# Se usi PyCharm
+.idea/
+
+# ==========================================
+# FILE DI SISTEMA (OS)
+# ==========================================
+# macOS
+.DS_Store
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
