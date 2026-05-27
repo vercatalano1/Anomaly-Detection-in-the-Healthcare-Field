@@ -8,9 +8,10 @@ from dataloader import get_dataset
 # Configurazione stile grafico per la tesi
 sns.set_theme(style="whitegrid", font_scale=1.1)
 
-def plot_comprehensive_eda(dataset_name, dataset, is_brats=False):
+def plot_comprehensive_eda(dataset_name, dataset):
     """
     Analisi esplorativa avanzata per validazione dataset tesi.
+    Focalizzata esclusivamente su BraTS2021.
     """
     print(f"\n{'='*20}\nANALISI: {dataset_name}\n{'='*20}")
     
@@ -53,25 +54,21 @@ def plot_comprehensive_eda(dataset_name, dataset, is_brats=False):
     plt.show()
 
     # 4. Analisi specifica per BraTS (Segmentazione)
-    if is_brats:
-        masks = np.stack([dataset[i]['mask'] for i in range(len(dataset))])
-        tumor_ratios = np.sum(masks, axis=(1, 2)) / (64*64)
-        
-        plt.figure(figsize=(6, 4))
-        sns.histplot(tumor_ratios[tumor_ratios > 0], bins=30, kde=True, color='red')
-        plt.title("Distribuzione Area Tumore (%)", fontweight='bold')
-        plt.xlabel("Percentuale Copertura Tumore")
-        plt.savefig(f"results/eda_{dataset_name}_tumor_ratio.png", dpi=300, bbox_inches='tight')
-        plt.show()
-        print(f"Area tumorale media: {np.mean(tumor_ratios[tumor_ratios > 0])*100:.2f}% della fetta.")
+    # Estraiamo le maschere convertendo i Tensori [1, 64, 64] in array NumPy [64, 64]
+    masks = np.stack([dataset[i]['mask'].numpy().squeeze() for i in range(len(dataset))])
+    tumor_ratios = np.sum(masks, axis=(1, 2)) / (64*64)
+    
+    plt.figure(figsize=(6, 4))
+    sns.histplot(tumor_ratios[tumor_ratios > 0], bins=30, kde=True, color='red')
+    plt.title("Distribuzione Area Tumore (%)", fontweight='bold')
+    plt.xlabel("Percentuale Copertura Tumore")
+    plt.savefig(f"results/eda_{dataset_name}_tumor_ratio.png", dpi=300, bbox_inches='tight')
+    plt.show()
+    print(f"Area tumorale media: {np.mean(tumor_ratios[tumor_ratios > 0])*100:.2f}% della fetta.")
 
 if __name__ == "__main__":
     os.makedirs("results", exist_ok=True)
     
-    # Eseguiamo per RSNA
-    ds_rsna = get_dataset("rsna", data_root="data", mode="test")
-    plot_comprehensive_eda("RSNA", ds_rsna, is_brats=False)
-    
-    # Eseguiamo per BraTS
+    # Eseguiamo l'EDA SOLO per BraTS (Il nostro dataset definitivo)
     ds_brats = get_dataset("brats", data_root="data", mode="test")
-    plot_comprehensive_eda("BraTS2021", ds_brats, is_brats=True)
+    plot_comprehensive_eda("BraTS2021", ds_brats)
