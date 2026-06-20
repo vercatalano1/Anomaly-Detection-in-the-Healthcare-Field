@@ -1,0 +1,29 @@
+================================================================================
+ANALISI EDA - BraTS2021
+Task: Anomaly Detection in Imaging Medico
+================================================================================
+
+COMPOSIZIONE DATASET
+Train: 4211 (solo sani)
+Test: 2776 (828 sani, 1948 anomali)
+
+RISULTATI CHIAVE
+- Separabilità tra classi nelle distribuzioni di intensità
+- Presenza di strutture anatomiche differenti nei casi patologici
+- Elevata variabilità della dimensione delle lesioni
+
+OSSERVAZIONI PRINCIPALI
+- Le distribuzioni delle intensità mostrano una parziale separazione tra immagini sane e patologiche.
+- Le immagini medie evidenziano differenze strutturali associate alla presenza della massa tumorale.
+- La mappa di frequenza conferma che le anomalie possono comparire in regioni differenti del cervello.
+- La variabilità dell'area tumorale suggerisce la necessità di modelli robusti a lesioni di dimensioni differenti.
+- La proiezione nello spazio delle componenti principali (PCA) mostra una parziale separazione tra immagini sane e patologiche.
+
+MOTIVAZIONE DATASET
+- BraTS2021 rappresenta uno dei benchmark più utilizzati nell'imaging cerebrale.
+- Le lesioni tumorali sono annotate mediante maschere di segmentazione affidabili.
+- La disponibilità di immagini sane e patologiche rende il dataset particolarmente adatto allo studio dell'anomaly detection.
+- L'elevata variabilità anatomica e patologica permette di valutare la robustezza dei modelli.
+- La struttura del train set, costituito esclusivamente da esempi normali, è coerente con il paradigma one-class learning utilizzato da Isolation Forest e Autoencoder.
+
+================================================================================
