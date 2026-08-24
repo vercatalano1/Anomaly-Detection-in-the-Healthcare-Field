@@ -2,7 +2,7 @@
 # DATI E RISULTATI (Specifici del progetto)
 # ==========================================
 # Ignora i dataset pesanti
-data/
+BraTS2021/
 # Ignora la cartella dei risultati, grafici e log di training
 #results/
 

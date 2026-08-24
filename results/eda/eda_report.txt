@@ -1,0 +1,203 @@
+
+
+================================================================================
+0. DATASET
+================================================================================
+Dataset: C:\Users\catal\OneDrive\Desktop\Anomaly-Detection-in-the-Healthcare-Field\BraTS2021
+
+Train:       4211
+Test normal: 828
+Test tumor:  1948
+Annotation:  1948
+
+
+================================================================================
+1. ANALISI DEI PAZIENTI
+================================================================================
+Pazienti TRAIN: 933
+Pazienti TEST NORMAL: 175
+Pazienti TEST TUMOR: 199
+Pazienti con annotation: 199
+
+
+================================================================================
+2. CONTROLLO DATA LEAKAGE
+================================================================================
+TRAIN ∩ TEST NORMAL: 0
+TRAIN ∩ TEST TUMOR: 0
+TEST NORMAL ∩ TEST TUMOR: 174
+
+
+================================================================================
+3. DISTRIBUZIONE DEL DATASET
+================================================================================
+TRAIN:       4211
+TEST NORMAL: 828
+TEST TUMOR:  1948
+[FIGURA] results\eda\figures\01_class_distribution.png
+
+
+================================================================================
+4. SLICE PER PAZIENTE
+================================================================================
+
+TRAIN
+  Min: 1
+  Max: 14
+  Mean: 4.51
+  Median: 4.00
+  Std: 2.69
+
+TEST NORMAL
+  Min: 1
+  Max: 14
+  Mean: 4.73
+  Median: 4.00
+  Std: 2.87
+
+TEST TUMOR
+  Min: 1
+  Max: 14
+  Mean: 9.79
+  Median: 10.00
+  Std: 3.12
+[FIGURA] results\eda\figures\02_slices_per_patient.png
+
+
+================================================================================
+5. STATISTICHE DELLE IMMAGINI
+================================================================================
+train: 500/4211
+train: 1000/4211
+train: 1500/4211
+train: 2000/4211
+train: 2500/4211
+train: 3000/4211
+train: 3500/4211
+train: 4000/4211
+normal: 500/828
+tumor: 500/1948
+tumor: 1000/1948
+tumor: 1500/1948
+
+Salvato: results\eda\image_statistics.csv
+
+
+================================================================================
+6. STATISTICHE INTENSITA' NORMAL / TUMOR
+================================================================================
+
+NORMAL
+mean                : mean=30.2509 | median=30.2649
+std                 : mean=45.6952 | median=46.4947
+median              : mean=0.2246 | median=0.0000
+p25                 : mean=0.2246 | median=0.0000
+p75                 : mean=68.4236 | median=79.0000
+p95                 : mean=113.9143 | median=113.5000
+nonzero_fraction    : mean=0.3303 | median=0.3182
+
+TUMOR
+mean                : mean=36.0822 | median=36.1022
+std                 : mean=51.6094 | median=52.6083
+median              : mean=0.0580 | median=0.0000
+p25                 : mean=0.0339 | median=0.0000
+p75                 : mean=84.8228 | median=89.0000
+p95                 : mean=128.1844 | median=130.0000
+nonzero_fraction    : mean=0.3556 | median=0.3630
+
+
+================================================================================
+7. DISTRIBUZIONE DELLE INTENSITA'
+================================================================================
+Wasserstein globale: 5.766799
+Wasserstein non-zero: 12.388355
+[FIGURA] results\eda\figures\03_intensity_distribution.png
+
+
+================================================================================
+8. ANALISI ANATOMICA
+================================================================================
+[FIGURA] results\eda\figures\04_mean_images.png
+
+
+================================================================================
+9. FREQUENZA SPAZIALE DEL TUMORE
+================================================================================
+Maschere associate a immagini tumor: 1948
+[FIGURA] results\eda\figures\05_tumor_frequency.png
+
+
+================================================================================
+10. AREA DELLA LESIONE
+================================================================================
+Numero slice con tumore: 1948
+Min: 0.3490%
+Max: 14.8946%
+Media: 4.4567%
+Mediana: 4.0288%
+Std: 2.8974%
+[FIGURA] results\eda\figures\06_tumor_area.png
+
+
+================================================================================
+11. ESEMPI VISIVI NORMAL
+================================================================================
+[FIGURA] results\eda\figures\07_normal_examples.png
+
+
+================================================================================
+12. ESEMPI VISIVI TUMOR
+================================================================================
+[FIGURA] results\eda\figures\08_tumor_examples.png
+
+
+================================================================================
+13. VISUALIZZAZIONE FLAIR + SEGMENTATION
+================================================================================
+[FIGURA] results\eda\figures\09_overlay.png
+
+
+================================================================================
+14. PCA ESPLORATIVA
+================================================================================
+Immagini utilizzate per PCA: 1500
+Feature originali per immagine: 43264
+Varianza spiegata PC1: 0.3068
+Varianza spiegata PC2: 0.1365
+Varianza spiegata cumulativa: 0.4432
+[FIGURA] results\eda\figures\10_pca.png
+
+
+================================================================================
+15. DATASET SUMMARY
+================================================================================
+Salvato: results\eda\dataset_summary.csv
+Salvato: results\eda\patient_summary.csv
+
+
+================================================================================
+16. ANNOTATION SUMMARY
+================================================================================
+Salvato: results\eda\annotation_statistics.csv
+
+
+================================================================================
+17. CONTROLLO DIMENSIONI
+================================================================================
+(208, 208): 8935 immagini
+
+
+================================================================================
+18. EDA COMPLETATA
+================================================================================
+
+Il report non contiene conclusioni automatiche.
+I risultati devono essere interpretati a partire dalle statistiche e dalle figure.
+
+Report:
+C:\Users\catal\OneDrive\Desktop\Anomaly-Detection-in-the-Healthcare-Field\results\eda\eda_report.txt
+
+Figure:
+C:\Users\catal\OneDrive\Desktop\Anomaly-Detection-in-the-Healthcare-Field\results\eda\figures
+
+Dataset originale NON modificato.

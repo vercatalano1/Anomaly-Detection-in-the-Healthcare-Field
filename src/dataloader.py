@@ -1,18 +1,7 @@
-"""
-DATALOADER DEFINITIVO per BraTS2021 (MedIAnomaly)
-
-Caratteristiche:
-✓ Type hints completi (Python 3.9+)
-✓ Docstring per ogni funzione
-✓ Seed riproducibilità
-✓ Robust error handling
-✓ Stats method per dataset analysis
-✓ Production-ready
-"""
-
 import os
 import time
-from typing import Tuple, Optional, List, Dict
+from typing import Optional, List, Dict, Callable
+
 import numpy as np
 from PIL import Image
 from joblib import Parallel, delayed
@@ -23,10 +12,16 @@ from torchvision import transforms
 
 
 # ==========================================================
-# RIPRODUCIBILITÀ
+# CONFIGURAZIONE
 # ==========================================================
 
 SEED: int = 42
+DEFAULT_IMG_SIZE: int = 64
+
+
+# ==========================================================
+# RIPRODUCIBILITÀ
+# ==========================================================
 
 torch.manual_seed(SEED)
 np.random.seed(SEED)
@@ -46,340 +41,704 @@ torch.backends.cudnn.benchmark = False
 def load_single_image(
     file_name: str,
     img_dir: str,
-    mode: str,
     img_size: int,
-    resample: int
+    resample: int = Image.BILINEAR
 ) -> Image.Image:
     """
-    Carica una singola immagine e la preprocessing.
-    
+    Carica e ridimensiona una singola immagine grayscale.
+
     Args:
-        file_name: nome file da caricare
-        img_dir: directory contenente il file
-        mode: modalità PIL ("L" per grayscale, "RGB" per colore)
-        img_size: dimensione target (quadrata)
-        resample: metodo interpolazione PIL
-    
+        file_name:
+            Nome del file.
+        img_dir:
+            Directory contenente il file.
+        img_size:
+            Dimensione finale quadrata.
+        resample:
+            Metodo di interpolazione PIL.
+
     Returns:
-        Image.Image preprocessata
+        Immagine PIL grayscale ridimensionata.
     """
-    return (
-        Image.open(os.path.join(img_dir, file_name))
-        .convert(mode)
-        .resize((img_size, img_size), resample=resample)
+
+    path = os.path.join(img_dir, file_name)
+
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"Immagine non trovata: {path}"
+        )
+
+    image = Image.open(path).convert("L")
+
+    image = image.resize(
+        (img_size, img_size),
+        resample=resample
     )
+
+    return image
 
 
 def parallel_load(
     img_dir: str,
     img_list: List[str],
     img_size: int,
-    n_channel: int = 1,
     resample: str = "bilinear",
     verbose: int = 0
 ) -> List[Image.Image]:
     """
-    Caricamento parallelo delle immagini su multicore CPU.
-    
+    Carica immagini in parallelo.
+
     Args:
-        img_dir: directory base
-        img_list: lista filename da caricare
-        img_size: dimensione target
-        n_channel: numero canali (1=grayscale, 3=RGB)
-        resample: "bilinear" o "nearest"
-        verbose: verbosity della joblib.Parallel
-    
+        img_dir:
+            Directory contenente le immagini.
+        img_list:
+            Lista dei file.
+        img_size:
+            Dimensione finale.
+        resample:
+            "bilinear" oppure "nearest".
+        verbose:
+            Verbosity di joblib.
+
     Returns:
-        Lista di Image.Image preprocessate
-    
+        Lista di immagini PIL.
+
     Raises:
-        ValueError: se resample non è valido
+        ValueError:
+            Se il metodo di interpolazione non è valido.
     """
-    mode = "L" if n_channel == 1 else "RGB"
 
     if resample == "bilinear":
         resample_method = Image.BILINEAR
+
     elif resample == "nearest":
         resample_method = Image.NEAREST
-    else:
-        raise ValueError(f"Metodo di interpolazione '{resample}' non valido. Usa 'bilinear' o 'nearest'.")
 
-    images = Parallel(n_jobs=-1, verbose=verbose)(
+    else:
+        raise ValueError(
+            f"Metodo di interpolazione non valido: {resample}. "
+            f"Usare 'bilinear' oppure 'nearest'."
+        )
+
+    images = Parallel(
+        n_jobs=-1,
+        verbose=verbose
+    )(
         delayed(load_single_image)(
-            file_name,
-            img_dir,
-            mode,
-            img_size,
-            resample_method
+            file_name=file_name,
+            img_dir=img_dir,
+            img_size=img_size,
+            resample=resample_method
         )
         for file_name in img_list
     )
-    
+
     return images
 
 
 # ==========================================================
-# DATASET BraTS2021
+# DATASET BRATS2021
 # ==========================================================
 
 class BraTSDataset(data.Dataset):
     """
-    PyTorch Dataset per BraTS2021 (MedIAnomaly format).
-    
-    Supporta:
-    - Train mode: carica solo immagini sane da train/
-    - Test mode: carica sane da test/normal/ + anomale da test/tumor/ + maschere
-    - Context encoding: masking casuale per self-supervised learning
-    
-    Attributes:
-        mode (str): "train" o "test"
-        root (str): percorso base BraTS2021
-        res (int): risoluzione immagini
-        labels (List[int]): 0=sano, 1=anomalo
-        img_ids (List[str]): ID immagini
-        slices (List[Image.Image]): immagini caricate
-        masks (List[np.ndarray]): maschere segmentazione (solo test)
+    Dataset PyTorch per BraTS2021 nel formato MedIAnomaly.
+
+    Struttura attesa:
+
+        BraTS2021/
+        ├── train/
+        │   ├── image_001.png
+        │   ├── image_002.png
+        │   └── ...
+        │
+        └── test/
+            ├── normal/
+            │   ├── image_001.png
+            │   └── ...
+            │
+            ├── tumor/
+            │   ├── image_001.png
+            │   └── ...
+            │
+            └── annotation/
+                ├── image_001_seg.png
+                └── ...
+
+    TRAIN:
+        label = 0 per tutte le immagini.
+
+    TEST:
+        label = 0 -> healthy
+        label = 1 -> tumor
+
+    Le immagini vengono convertite in:
+        torch.Tensor [1, H, W]
+
+    con valori nell'intervallo:
+        [0, 1]
     """
-    
+
     def __init__(
         self,
         main_path: str,
-        img_size: int = 64,
-        transform: Optional[callable] = None,
-        mode: str = "train",
-        context_encoding: bool = False
+        img_size: int = DEFAULT_IMG_SIZE,
+        transform: Optional[Callable] = None,
+        mode: str = "train"
     ) -> None:
-        """
-        Inizializza il dataset.
-        
-        Args:
-            main_path: percorso a BraTS2021/
-            img_size: dimensione target immagini
-            transform: torchvision.transforms.Compose
-            mode: "train" o "test"
-            context_encoding: abilita masking casuale per SSL
-        
-        Raises:
-            AssertionError: se mode non è "train" o "test"
-            FileNotFoundError: se le directory richieste non esistono
-        """
-        super().__init__()
-        
-        assert mode in ["train", "test"], f"mode deve essere 'train' o 'test', got {mode}"
 
-        self.mode: str = mode
-        self.root: str = main_path
-        self.res: int = img_size
+        super().__init__()
+
+        if mode not in ("train", "test"):
+            raise ValueError(
+                f"mode deve essere 'train' oppure 'test', ricevuto: {mode}"
+            )
+
+        if img_size <= 0:
+            raise ValueError(
+                f"img_size deve essere positivo, ricevuto: {img_size}"
+            )
+
+        self.mode = mode
+        self.root = main_path
+        self.res = img_size
 
         self.labels: List[int] = []
-        self.masks: List[np.ndarray] = []
         self.img_ids: List[str] = []
         self.slices: List[Image.Image] = []
+        self.masks: List[np.ndarray] = []
 
-        self.transform: callable = transform if transform is not None else lambda x: x
+        self.transform = (
+            transform
+            if transform is not None
+            else get_transforms()
+        )
 
-        # Context Encoding per SSL
-        if context_encoding:
-            self.random_mask = transforms.RandomErasing(
-                p=1.0,
-                scale=(0.02, 0.08),
-                ratio=(0.5, 2.0),
-                value=-1
-            )
-        else:
-            self.random_mask = None
+        print()
+        print("=" * 70)
+        print(f"CARICAMENTO BRATS2021 — {mode.upper()}")
+        print("=" * 70)
+        print(f"Root:       {main_path}")
+        print(f"Resolution: {img_size}x{img_size}")
+        print("Channels:   1 (grayscale)")
+        print("Range:      [0, 1]")
+        print()
 
-        print(f"\n[{mode.upper()}] Caricamento BraTS2021 da {main_path}...")
-
-        # =====================================================
-        # TRAIN MODE
-        # =====================================================
         if mode == "train":
-            train_dir = os.path.join(self.root, "train")
-            
-            if not os.path.exists(train_dir):
-                raise FileNotFoundError(
-                    f"Directory {train_dir} non trovata.\n"
-                    f"Struttura attesa: {main_path}/train/*.png"
-                )
+            self._load_train()
 
-            train_imgs = sorted(os.listdir(train_dir))
-            
-            if not train_imgs:
-                raise FileNotFoundError(f"Nessuna immagine trovata in {train_dir}")
-
-            t0 = time.time()
-
-            self.slices += parallel_load(train_dir, train_imgs, img_size)
-            self.labels += [0] * len(train_imgs)
-            self.img_ids += [img.split(".")[0] for img in train_imgs]
-
-            elapsed = time.time() - t0
-            print(f"  ✓ Caricate {len(train_imgs)} immagini SANE in {elapsed:.2f}s")
-
-        # =====================================================
-        # TEST MODE
-        # =====================================================
         else:
-            normal_dir = os.path.join(self.root, "test", "normal")
-            tumor_dir = os.path.join(self.root, "test", "tumor")
-            annotation_dir = os.path.join(self.root, "test", "annotation")
+            self._load_test()
 
-            # Validazione path
-            for p in [normal_dir, tumor_dir, annotation_dir]:
-                if not os.path.exists(p):
-                    raise FileNotFoundError(
-                        f"Directory {p} non trovata.\n"
-                        f"Struttura attesa:\n"
-                        f"  {self.root}/test/normal/*.png\n"
-                        f"  {self.root}/test/tumor/*.png\n"
-                        f"  {self.root}/test/annotation/*_seg.png"
-                    )
+        self._validate_dataset()
 
-            normal_imgs = sorted(os.listdir(normal_dir))
-            tumor_imgs = sorted(os.listdir(tumor_dir))
-            
-            if not normal_imgs or not tumor_imgs:
-                raise FileNotFoundError(
-                    f"Nessuna immagine trovata in {normal_dir} o {tumor_dir}"
-                )
+    # ======================================================
+    # TRAIN
+    # ======================================================
 
-            # Mapping nome immagine → nome maschera
-            # Supporta variazioni: img.png → img_seg.png oppure img_flair.png → img_seg.png
-            tumor_masks = [file.replace("flair", "seg") for file in tumor_imgs]
+    def _load_train(self) -> None:
+        """
+        Carica esclusivamente le immagini sane del training set.
+        """
 
-            t0 = time.time()
+        train_dir = os.path.join(
+            self.root,
+            "train"
+        )
 
-            # Carica immagini
-            self.slices += parallel_load(normal_dir, normal_imgs, img_size)
-            self.slices += parallel_load(tumor_dir, tumor_imgs, img_size)
-
-            # Maschere vuote per sani
-            self.masks += [
-                np.zeros((img_size, img_size), dtype=np.float32)
-                for _ in range(len(normal_imgs))
-            ]
-            
-            # Maschere reali (nearest neighbor per preservare bordi binari)
-            self.masks += parallel_load(
-                annotation_dir,
-                tumor_masks,
-                img_size,
-                resample="nearest"
+        if not os.path.isdir(train_dir):
+            raise FileNotFoundError(
+                f"Directory TRAIN non trovata:\n{train_dir}"
             )
 
-            # Labels
-            self.labels += [0] * len(normal_imgs) + [1] * len(tumor_imgs)
-            
-            all_imgs = normal_imgs + tumor_imgs
-            self.img_ids += [file.split(".")[0] for file in all_imgs]
+        train_imgs = sorted(
+            self._get_image_files(train_dir)
+        )
 
-            elapsed = time.time() - t0
-            print(f"  ✓ Caricate {len(normal_imgs)} immagini SANE in {elapsed:.2f}s")
-            print(f"  ✓ Caricate {len(tumor_imgs)} immagini ANOMALE in {elapsed:.2f}s")
+        if len(train_imgs) == 0:
+            raise FileNotFoundError(
+                f"Nessuna immagine trovata in:\n{train_dir}"
+            )
 
-    def __getitem__(self, index: int) -> Dict:
+        print(
+            f"[TRAIN] Trovate {len(train_imgs)} immagini sane."
+        )
+
+        t0 = time.time()
+
+        self.slices = parallel_load(
+            img_dir=train_dir,
+            img_list=train_imgs,
+            img_size=self.res,
+            resample="bilinear"
+        )
+
+        self.labels = [0] * len(train_imgs)
+
+        self.img_ids = [
+            os.path.splitext(file)[0]
+            for file in train_imgs
+        ]
+
+        elapsed = time.time() - t0
+
+        print(
+            f"[TRAIN] Caricamento completato in "
+            f"{elapsed:.2f}s"
+        )
+
+    # ======================================================
+    # TEST
+    # ======================================================
+
+    def _load_test(self) -> None:
+        """
+        Carica immagini sane, tumorali e relative maschere.
+        """
+
+        normal_dir = os.path.join(
+            self.root,
+            "test",
+            "normal"
+        )
+
+        tumor_dir = os.path.join(
+            self.root,
+            "test",
+            "tumor"
+        )
+
+        annotation_dir = os.path.join(
+            self.root,
+            "test",
+            "annotation"
+        )
+
+        for directory in (
+            normal_dir,
+            tumor_dir,
+            annotation_dir
+        ):
+            if not os.path.isdir(directory):
+                raise FileNotFoundError(
+                    f"Directory non trovata:\n{directory}"
+                )
+
+        normal_imgs = sorted(
+            self._get_image_files(normal_dir)
+        )
+
+        tumor_imgs = sorted(
+            self._get_image_files(tumor_dir)
+        )
+
+        if len(normal_imgs) == 0:
+            raise FileNotFoundError(
+                "Nessuna immagine sana trovata in:\n"
+                f"{normal_dir}"
+            )
+
+        if len(tumor_imgs) == 0:
+            raise FileNotFoundError(
+                "Nessuna immagine tumorale trovata in:\n"
+                f"{tumor_dir}"
+            )
+
+        print(
+            f"[TEST] Healthy images: {len(normal_imgs)}"
+        )
+
+        print(
+            f"[TEST] Tumor images:   {len(tumor_imgs)}"
+        )
+
+        # --------------------------------------------------
+        # MAPPING MASCHERE
+        # --------------------------------------------------
+
+        tumor_masks = [
+            self._find_mask_file(
+                image_name,
+                annotation_dir
+            )
+            for image_name in tumor_imgs
+        ]
+
+        t0 = time.time()
+
+        # --------------------------------------------------
+        # IMMAGINI HEALTHY
+        # --------------------------------------------------
+
+        normal_slices = parallel_load(
+            img_dir=normal_dir,
+            img_list=normal_imgs,
+            img_size=self.res,
+            resample="bilinear"
+        )
+
+        # --------------------------------------------------
+        # IMMAGINI TUMOR
+        # --------------------------------------------------
+
+        tumor_slices = parallel_load(
+            img_dir=tumor_dir,
+            img_list=tumor_imgs,
+            img_size=self.res,
+            resample="bilinear"
+        )
+
+        self.slices = (
+            normal_slices +
+            tumor_slices
+        )
+
+        # --------------------------------------------------
+        # LABELS
+        # --------------------------------------------------
+
+        self.labels = (
+            [0] * len(normal_imgs) +
+            [1] * len(tumor_imgs)
+        )
+
+        # --------------------------------------------------
+        # IDS
+        # --------------------------------------------------
+
+        self.img_ids = (
+            [
+                os.path.splitext(file)[0]
+                for file in normal_imgs
+            ]
+            +
+            [
+                os.path.splitext(file)[0]
+                for file in tumor_imgs
+            ]
+        )
+
+        # --------------------------------------------------
+        # MASCHERE HEALTHY
+        # --------------------------------------------------
+
+        normal_masks = [
+            np.zeros(
+                (self.res, self.res),
+                dtype=np.float32
+            )
+            for _ in normal_imgs
+        ]
+
+        # --------------------------------------------------
+        # MASCHERE TUMOR
+        # --------------------------------------------------
+
+        tumor_mask_images = parallel_load(
+            img_dir=annotation_dir,
+            img_list=tumor_masks,
+            img_size=self.res,
+            resample="nearest"
+        )
+
+        tumor_masks_np = []
+
+        for mask in tumor_mask_images:
+
+            mask_np = np.asarray(
+                mask,
+                dtype=np.float32
+            )
+
+            mask_np = (
+                mask_np > 0
+            ).astype(np.float32)
+
+            tumor_masks_np.append(
+                mask_np
+            )
+
+        self.masks = (
+            normal_masks +
+            tumor_masks_np
+        )
+
+        elapsed = time.time() - t0
+
+        print(
+            f"[TEST] Caricamento completato in "
+            f"{elapsed:.2f}s"
+        )
+
+    # ======================================================
+    # FILE UTILITY
+    # ======================================================
+
+    @staticmethod
+    def _get_image_files(
+        directory: str
+    ) -> List[str]:
+        """
+        Restituisce esclusivamente file immagine validi.
+        """
+
+        valid_extensions = (
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".bmp",
+            ".tif",
+            ".tiff"
+        )
+
+        files = []
+
+        for file_name in os.listdir(directory):
+
+            if file_name.lower().endswith(
+                valid_extensions
+            ):
+                files.append(file_name)
+
+        return sorted(files)
+
+    @staticmethod
+    def _find_mask_file(
+        image_name: str,
+        annotation_dir: str
+    ) -> str:
+        """
+        Trova la maschera corrispondente all'immagine tumorale.
+
+        Supporta diversi naming convention.
+        """
+
+        stem, _ = os.path.splitext(image_name)
+
+        candidates = [
+            f"{stem}_seg.png",
+            f"{stem}_seg.jpg",
+            f"{stem}_seg.jpeg",
+            f"{stem}_seg.tif",
+        ]
+
+        # Caso comune:
+        # image_flair.png -> image_seg.png
+        if "flair" in stem.lower():
+
+            seg_stem = stem.lower().replace(
+                "flair",
+                "seg"
+            )
+
+            candidates.extend([
+                f"{seg_stem}.png",
+                f"{seg_stem}.jpg",
+                f"{seg_stem}.jpeg",
+                f"{seg_stem}.tif",
+            ])
+
+        for candidate in candidates:
+
+            path = os.path.join(
+                annotation_dir,
+                candidate
+            )
+
+            if os.path.isfile(path):
+                return candidate
+
+        raise FileNotFoundError(
+            "\nMaschera non trovata per:"
+            f"\n  {image_name}"
+            f"\n\nDirectory annotation:"
+            f"\n  {annotation_dir}"
+            f"\n\nCandidati cercati:"
+            f"\n  {candidates}"
+        )
+
+    # ======================================================
+    # VALIDATION
+    # ======================================================
+
+    def _validate_dataset(self) -> None:
+        """
+        Controlla la coerenza interna del dataset.
+        """
+
+        n = len(self.slices)
+
+        if len(self.labels) != n:
+            raise RuntimeError(
+                "Numero immagini e labels non coincide."
+            )
+
+        if len(self.img_ids) != n:
+            raise RuntimeError(
+                "Numero immagini e img_ids non coincide."
+            )
+
+        if self.mode == "test":
+
+            if len(self.masks) != n:
+                raise RuntimeError(
+                    "Numero immagini e maschere non coincide."
+                )
+
+        if n == 0:
+            raise RuntimeError(
+                "Dataset vuoto."
+            )
+
+        print()
+        print("Dataset validation: OK")
+        print(f"  Samples: {n}")
+        print()
+
+    # ======================================================
+    # GET ITEM
+    # ======================================================
+
+    def __getitem__(
+        self,
+        index: int
+    ) -> Dict:
         """
         Restituisce un campione.
-        
-        Args:
-            index: indice campione
-        
-        Returns:
-            Dict con chiavi:
-            - 'img': torch.Tensor [1, H, W] normalizzato
-            - 'label': int (0 o 1)
-            - 'name': str (ID immagine)
-            - 'mask': torch.Tensor [1, H, W] (solo test mode)
-            - 'img_masked': torch.Tensor (solo se context_encoding=True)
+
+        TRAIN:
+            img
+            label
+            name
+
+        TEST:
+            img
+            label
+            name
+            mask
         """
+
         img = self.slices[index]
+
         img = self.transform(img)
-        
-        label = self.labels[index]
-        img_name = self.img_ids[index]
+
+        label = int(
+            self.labels[index]
+        )
+
+        name = self.img_ids[index]
 
         if self.mode == "train":
-            if self.random_mask is not None:
-                img_masked = self.random_mask(img)
-                return {
-                    "img": img,
-                    "img_masked": img_masked,
-                    "label": label,
-                    "name": img_name
-                }
+
             return {
                 "img": img,
                 "label": label,
-                "name": img_name
-            }
-        
-        else:  # TEST MODE
-            mask_np = np.asarray(self.masks[index], dtype=np.float32)
-            mask_np = (mask_np > 0).astype(np.float32)
-            mask_tensor = torch.from_numpy(mask_np).unsqueeze(0)
-            
-            return {
-                "img": img,
-                "label": label,
-                "name": img_name,
-                "mask": mask_tensor
+                "name": name
             }
 
-    def __len__(self) -> int:
-        """Numero totale di campioni."""
-        return len(self.slices)
-    
-    def get_statistics(self) -> Dict[str, any]:
-        """
-        Ritorna statistiche del dataset.
-        
-        Returns:
-            Dict con:
-            - n_samples: numero campioni
-            - n_healthy: numero campioni sani
-            - n_anomalous: numero campioni anomali
-            - anomaly_rate: percentuale anomali
-            - img_shape: shape immagini
-        """
-        labels_arr = np.array(self.labels)
-        n_healthy = (labels_arr == 0).sum()
-        n_anomalous = (labels_arr == 1).sum()
-        
+        # TEST
+
+        mask = torch.from_numpy(
+            self.masks[index]
+        ).float().unsqueeze(0)
+
         return {
-            'n_samples': len(self),
-            'n_healthy': int(n_healthy),
-            'n_anomalous': int(n_anomalous),
-            'anomaly_rate': float(n_anomalous / len(self)) if len(self) > 0 else 0,
-            'img_shape': (self.res, self.res)
+            "img": img,
+            "label": label,
+            "name": name,
+            "mask": mask
+        }
+
+    # ======================================================
+    # LEN
+    # ======================================================
+
+    def __len__(self) -> int:
+        """
+        Numero totale di campioni.
+        """
+
+        return len(self.slices)
+
+    # ======================================================
+    # STATISTICS
+    # ======================================================
+
+    def get_statistics(self) -> Dict:
+        """
+        Calcola statistiche del dataset.
+        """
+
+        labels = np.asarray(
+            self.labels
+        )
+
+        n_samples = len(labels)
+
+        n_healthy = int(
+            np.sum(labels == 0)
+        )
+
+        n_anomalous = int(
+            np.sum(labels == 1)
+        )
+
+        anomaly_rate = (
+            n_anomalous / n_samples
+            if n_samples > 0
+            else 0.0
+        )
+
+        return {
+            "n_samples": n_samples,
+            "n_healthy": n_healthy,
+            "n_anomalous": n_anomalous,
+            "anomaly_rate": float(
+                anomaly_rate
+            ),
+            "img_shape": (
+                self.res,
+                self.res
+            ),
+            "channels": 1,
+            "value_range": "[0, 1]"
         }
 
 
 # ==========================================================
-# TRANSFORMAZIONI
+# TRANSFORMS
 # ==========================================================
 
-def get_transforms(is_grayscale: bool = True) -> transforms.Compose:
+def get_transforms(
+    is_grayscale: bool = True
+) -> transforms.Compose:
     """
-    Ritorna le transformazioni standard per BraTS2021.
-    
-    Normalizza nell'intervallo [-1, 1] senza data augmentation
-    per preservare la coerenza anatomica delle immagini MRI.
-    
-    Args:
-        is_grayscale: True per grayscale (1 canale), False per RGB
-    
-    Returns:
-        torchvision.transforms.Compose con ToTensor + Normalize
+    Trasformazioni definitive per la baseline.
+
+    Pipeline:
+
+        PIL image
+            ↓
+        ToTensor()
+            ↓
+        [0, 1]
+
+    NON viene utilizzato Normalize(mean=0.5, std=0.5)
+    perché vogliamo mantenere i valori nell'intervallo
+    naturale [0,1].
+
+    La standardizzazione delle feature viene effettuata
+    successivamente nello script Isolation Forest.
     """
-    mean_std = (0.5,) if is_grayscale else (0.5, 0.5, 0.5)
-    
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean_std, mean_std)
+
+    if not is_grayscale:
+        raise ValueError(
+            "La baseline BraTS utilizza immagini grayscale."
+        )
+
+    return transforms.Compose([
+        transforms.ToTensor()
     ])
-    
-    return transform
 
 
 # ==========================================================
@@ -389,92 +748,306 @@ def get_transforms(is_grayscale: bool = True) -> transforms.Compose:
 def get_dataset(
     dataset_name: str,
     data_root: str = "data",
-    img_size: int = 64,
-    mode: str = "train",
-    context_encoding: bool = False
+    img_size: int = DEFAULT_IMG_SIZE,
+    mode: str = "train"
 ) -> BraTSDataset:
     """
-    Factory per instanziare dataset.
-    
+    Factory per creare il dataset.
+
     Args:
-        dataset_name: "brats"
-        data_root: percorso root (default "data")
-        img_size: dimensione immagini (default 64)
-        mode: "train" o "test" (default "train")
-        context_encoding: abilita SSL (default False)
-    
+        dataset_name:
+            Deve essere "brats".
+        data_root:
+            Directory contenente BraTS2021.
+        img_size:
+            Risoluzione finale.
+        mode:
+            "train" oppure "test".
+
     Returns:
-        BraTSDataset istanziato
-    
-    Raises:
-        ValueError: se dataset_name non è "brats"
-        FileNotFoundError: se le directory richieste non esistono
+        BraTSDataset.
     """
-    
-    transform = get_transforms()
-    
-    if dataset_name.lower() == "brats":
-        path = os.path.join(data_root, "BraTS2021")
-        return BraTSDataset(
-            path,
-            img_size=img_size,
-            transform=transform,
-            mode=mode,
-            context_encoding=context_encoding
+
+    if dataset_name.lower() != "brats":
+        raise ValueError(
+            f"Dataset non supportato: {dataset_name}. "
+            f"Utilizzare 'brats'."
         )
-    
-    raise ValueError(
-        f"Dataset '{dataset_name}' non supportato. Usa 'brats'."
+
+    transform = get_transforms(
+        is_grayscale=True
+    )
+
+    path = os.path.join(
+        "BraTS2021"
+    )
+
+    return BraTSDataset(
+        main_path=path,
+        img_size=img_size,
+        transform=transform,
+        mode=mode
     )
 
 
 # ==========================================================
-# TEST DI INTEGRITÀ
+# DATASET SUMMARY
+# ==========================================================
+
+def print_dataset_summary(
+    dataset: BraTSDataset,
+    name: str
+) -> None:
+    """
+    Stampa un riepilogo leggibile del dataset.
+    """
+
+    stats = dataset.get_statistics()
+
+    print("=" * 60)
+    print(f"{name}")
+    print("=" * 60)
+
+    print(
+        f"Samples:        {stats['n_samples']}"
+    )
+
+    print(
+        f"Healthy:        {stats['n_healthy']}"
+    )
+
+    print(
+        f"Anomalous:      {stats['n_anomalous']}"
+    )
+
+    print(
+        f"Anomaly rate:   {stats['anomaly_rate']:.2%}"
+    )
+
+    print(
+        f"Image shape:    {stats['img_shape']}"
+    )
+
+    print(
+        f"Channels:       {stats['channels']}"
+    )
+
+    print(
+        f"Value range:    {stats['value_range']}"
+    )
+
+    print("=" * 60)
+    print()
+
+
+# ==========================================================
+# INTEGRITY TEST
 # ==========================================================
 
 if __name__ == "__main__":
-    print("\n" + "="*70)
-    print("TEST DATALOADER BRATS2021")
-    print("="*70)
-    
+
+    print()
+    print("=" * 70)
+    print("BRATS2021 DATALOADER — INTEGRITY TEST")
+    print("=" * 70)
+
     try:
-        # Test TRAIN
-        print("\n[1/2] Caricamento TRAIN set...")
-        train_ds = get_dataset("brats", data_root="data", mode="train")
-        train_stats = train_ds.get_statistics()
-        print(f"  ✓ Campioni: {train_stats['n_samples']}")
-        print(f"  ✓ Sani: {train_stats['n_healthy']}")
-        print(f"  ✓ Anomali: {train_stats['n_anomalous']}")
-        
+
+        # ==================================================
+        # TRAIN
+        # ==================================================
+
+        print()
+        print("[1/2] Loading TRAIN...")
+
+        train_ds = get_dataset(
+            dataset_name="brats",
+            data_root="data",
+            img_size=64,
+            mode="train"
+        )
+
+        print_dataset_summary(
+            train_ds,
+            "TRAIN SET"
+        )
+
+        sample_train = train_ds[0]
+
+        print(
+            f"TRAIN image shape: "
+            f"{sample_train['img'].shape}"
+        )
+
+        print(
+            f"TRAIN image dtype: "
+            f"{sample_train['img'].dtype}"
+        )
+
+        print(
+            f"TRAIN min value: "
+            f"{sample_train['img'].min().item():.4f}"
+        )
+
+        print(
+            f"TRAIN max value: "
+            f"{sample_train['img'].max().item():.4f}"
+        )
+
+        # ==================================================
+        # TEST
+        # ==================================================
+
+        print()
+        print("[2/2] Loading TEST...")
+
+        test_ds = get_dataset(
+            dataset_name="brats",
+            data_root="data",
+            img_size=64,
+            mode="test"
+        )
+
+        print_dataset_summary(
+            test_ds,
+            "TEST SET"
+        )
+
+        sample_test = test_ds[0]
+
+        print(
+            f"TEST image shape: "
+            f"{sample_test['img'].shape}"
+        )
+
+        print(
+            f"TEST mask shape: "
+            f"{sample_test['mask'].shape}"
+        )
+
+        print(
+            f"TEST image dtype: "
+            f"{sample_test['img'].dtype}"
+        )
+
+        print(
+            f"TEST image min: "
+            f"{sample_test['img'].min().item():.4f}"
+        )
+
+        print(
+            f"TEST image max: "
+            f"{sample_test['img'].max().item():.4f}"
+        )
+
+        # ==================================================
+        # DATALOADER
+        # ==================================================
+
         from torch.utils.data import DataLoader
-        train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
-        for batch in train_loader:
-            print(f"  ✓ Batch shape: {batch['img'].shape}")
-            break
-        
-        # Test TEST
-        print("\n[2/2] Caricamento TEST set...")
-        test_ds = get_dataset("brats", data_root="data", mode="test")
-        test_stats = test_ds.get_statistics()
-        print(f"  ✓ Campioni: {test_stats['n_samples']}")
-        print(f"  ✓ Sani: {test_stats['n_healthy']}")
-        print(f"  ✓ Anomali: {test_stats['n_anomalous']}")
-        print(f"  ✓ Anomaly rate: {test_stats['anomaly_rate']:.2%}")
-        
-        test_loader = DataLoader(test_ds, batch_size=32, shuffle=False)
-        for batch in test_loader:
-            print(f"  ✓ Batch img shape: {batch['img'].shape}")
-            print(f"  ✓ Batch mask shape: {batch['mask'].shape}")
-            break
-        
-        print("\n" + "="*70)
-        print("✅ DATALOADER FUNZIONANTE!")
-        print("="*70 + "\n")
-        
+
+        train_loader = DataLoader(
+            train_ds,
+            batch_size=32,
+            shuffle=False,
+            num_workers=0
+        )
+
+        test_loader = DataLoader(
+            test_ds,
+            batch_size=32,
+            shuffle=False,
+            num_workers=0
+        )
+
+        train_batch = next(
+            iter(train_loader)
+        )
+
+        test_batch = next(
+            iter(test_loader)
+        )
+
+        print()
+        print("TRAIN batch:")
+        print(
+            f"  img:   {train_batch['img'].shape}"
+        )
+        print(
+            f"  label: {train_batch['label'].shape}"
+        )
+
+        print()
+        print("TEST batch:")
+        print(
+            f"  img:   {test_batch['img'].shape}"
+        )
+        print(
+            f"  label: {test_batch['label'].shape}"
+        )
+        print(
+            f"  mask:  {test_batch['mask'].shape}"
+        )
+
+        # ==================================================
+        # FINAL CHECK
+        # ==================================================
+
+        assert (
+            train_batch["img"].shape[1:]
+            == (1, 64, 64)
+        )
+
+        assert (
+            test_batch["img"].shape[1:]
+            == (1, 64, 64)
+        )
+
+        assert (
+            test_batch["mask"].shape[1:]
+            == (1, 64, 64)
+        )
+
+        assert (
+            train_batch["img"].min() >= 0
+        )
+
+        assert (
+            train_batch["img"].max() <= 1
+        )
+
+        assert (
+            test_batch["img"].min() >= 0
+        )
+
+        assert (
+            test_batch["img"].max() <= 1
+        )
+
+        print()
+        print("=" * 70)
+        print("DATALOADER TEST COMPLETATO CON SUCCESSO")
+        print("=" * 70)
+        print()
+        print("Configurazione:")
+        print("  Resolution:     64 x 64")
+        print("  Channels:       1")
+        print("  Normalization:  [0, 1]")
+        print("  Augmentation:   None")
+        print("  Train:          Healthy only")
+        print("  Test:           Healthy + Tumor")
+        print("  Seed:            42")
+        print("=" * 70)
+
     except Exception as e:
-        print(f"\n❌ ERRORE: {e}")
-        print("\nVerifica che i dati siano in:")
-        print("  data/BraTS2021/train/")
-        print("  data/BraTS2021/test/normal/")
-        print("  data/BraTS2021/test/tumor/")
-        print("  data/BraTS2021/test/annotation/")
+
+        print()
+        print("=" * 70)
+        print("ERRORE DURANTE IL TEST DEL DATALOADER")
+        print("=" * 70)
+
+        print(
+            f"\n{type(e).__name__}: {e}"
+        )
+
+        

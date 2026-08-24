@@ -1,0 +1,4 @@
+split,images,patients
+train,4211,933
+test_normal,828,175
+test_tumor,1948,199

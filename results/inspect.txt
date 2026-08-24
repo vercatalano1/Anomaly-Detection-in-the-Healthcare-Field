@@ -1,0 +1,671 @@
+======================================================================
+BRATS2021 - DATASET INSPECTION
+======================================================================
+
+Dataset path:
+C:\Users\catal\OneDrive\Desktop\Anomaly-Detection-in-the-Healthcare-Field\BraTS2021
+
+Output salvato in:
+C:\Users\catal\OneDrive\Desktop\Anomaly-Detection-in-the-Healthcare-Field\results\inspect.txt
+
+======================================================================
+1. STRUTTURA DEL DATASET
+======================================================================
+
+Numero totale di cartelle: 5
+  test
+  test\annotation
+  test\normal
+  test\tumor
+  train
+
+======================================================================
+2. FILE ED ESTENSIONI
+======================================================================
+
+Numero totale di file: 8936
+
+Distribuzione delle estensioni:
+  .png            : 8935
+  .md             : 1
+
+======================================================================
+3. DIMENSIONE DEL DATASET
+======================================================================
+
+Dimensione totale: 67.33 MB
+
+======================================================================
+4. NUMERO DI FILE PER CARTELLA
+======================================================================
+.                                        : 1 file
+test\annotation                          : 1948 file
+test\normal                              : 828 file
+test\tumor                               : 1948 file
+train                                    : 4211 file
+
+======================================================================
+5. ANALISI DEI FILE
+======================================================================
+
+Verranno analizzati al massimo 10 file per cartella.
+
+----------------------------------------------------------------------
+CARTELLA: .
+----------------------------------------------------------------------
+
+  FILE: readme.md
+    dimensione   : 99.00 B
+    tipo         : non analizzato automaticamente (.md)
+
+----------------------------------------------------------------------
+CARTELLA: test\annotation
+----------------------------------------------------------------------
+
+  FILE: BraTS2021_01467_seg_13.png
+    dimensione   : 348.00 B
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 255
+    mean        : 1.609075
+    std         : 20.192199
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_seg_18.png
+    dimensione   : 503.00 B
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 255
+    mean        : 7.927492
+    std         : 44.256810
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_seg_23.png
+    dimensione   : 597.00 B
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 255
+    mean        : 13.632928
+    std         : 57.363228
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_seg_28.png
+    dimensione   : 605.00 B
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 255
+    mean        : 18.731278
+    std         : 66.525296
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_seg_33.png
+    dimensione   : 654.00 B
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 255
+    mean        : 22.332540
+    std         : 72.083669
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_seg_38.png
+    dimensione   : 713.00 B
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 255
+    mean        : 25.273669
+    std         : 76.197291
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_seg_43.png
+    dimensione   : 761.00 B
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 255
+    mean        : 26.994730
+    std         : 78.453430
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_seg_48.png
+    dimensione   : 618.00 B
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 255
+    mean        : 25.851285
+    std         : 76.966153
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_seg_53.png
+    dimensione   : 610.00 B
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 255
+    mean        : 24.489761
+    std         : 75.134150
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_seg_58.png
+    dimensione   : 607.00 B
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 255
+    mean        : 21.908168
+    std         : 71.460584
+    NaN         : 0
+    Inf         : 0
+
+----------------------------------------------------------------------
+CARTELLA: test\normal
+----------------------------------------------------------------------
+
+  FILE: BraTS2021_01467_flair_0.png
+    dimensione   : 7.50 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 88
+    mean        : 14.995169
+    std         : 23.938579
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_flair_5.png
+    dimensione   : 8.17 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 108
+    mean        : 16.035387
+    std         : 24.588396
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01468_flair_32.png
+    dimensione   : 11.26 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 167
+    mean        : 36.412421
+    std         : 48.641054
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01468_flair_37.png
+    dimensione   : 10.82 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 167
+    mean        : 35.802191
+    std         : 48.759041
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01468_flair_42.png
+    dimensione   : 10.34 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 164
+    mean        : 35.806121
+    std         : 49.567135
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01468_flair_47.png
+    dimensione   : 10.03 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 169
+    mean        : 34.791836
+    std         : 49.765154
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01468_flair_52.png
+    dimensione   : 9.65 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 164
+    mean        : 32.621648
+    std         : 48.762746
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01468_flair_57.png
+    dimensione   : 9.25 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 191
+    mean        : 29.909948
+    std         : 47.321212
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01468_flair_62.png
+    dimensione   : 8.48 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 180
+    mean        : 26.682022
+    std         : 45.660172
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01468_flair_67.png
+    dimensione   : 7.51 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 177
+    mean        : 22.674626
+    std         : 42.874045
+    NaN         : 0
+    Inf         : 0
+
+----------------------------------------------------------------------
+CARTELLA: test\tumor
+----------------------------------------------------------------------
+
+  FILE: BraTS2021_01467_flair_13.png
+    dimensione   : 9.43 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 129
+    mean        : 19.291605
+    std         : 26.794152
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_flair_18.png
+    dimensione   : 9.66 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 135
+    mean        : 21.427862
+    std         : 29.192356
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_flair_23.png
+    dimensione   : 9.82 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 152
+    mean        : 23.377635
+    std         : 32.088636
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_flair_28.png
+    dimensione   : 10.04 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 166
+    mean        : 24.963989
+    std         : 34.805412
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_flair_33.png
+    dimensione   : 10.16 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 221
+    mean        : 25.510586
+    std         : 36.298353
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_flair_38.png
+    dimensione   : 9.99 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 221
+    mean        : 24.953934
+    std         : 36.201575
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_flair_43.png
+    dimensione   : 9.57 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 187
+    mean        : 24.436529
+    std         : 36.099547
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_flair_48.png
+    dimensione   : 9.18 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 191
+    mean        : 23.280557
+    std         : 35.538609
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_flair_53.png
+    dimensione   : 8.58 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 190
+    mean        : 22.002751
+    std         : 34.829948
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_01467_flair_58.png
+    dimensione   : 7.86 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 183
+    mean        : 19.919009
+    std         : 32.982753
+    NaN         : 0
+    Inf         : 0
+
+----------------------------------------------------------------------
+CARTELLA: train
+----------------------------------------------------------------------
+
+  FILE: BraTS2021_00000_flair_46.png
+    dimensione   : 11.26 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 169
+    mean        : 30.988189
+    std         : 44.820488
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_00000_flair_51.png
+    dimensione   : 10.72 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 165
+    mean        : 30.030071
+    std         : 44.235015
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_00000_flair_56.png
+    dimensione   : 10.17 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 169
+    mean        : 28.683178
+    std         : 44.047118
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_00000_flair_61.png
+    dimensione   : 9.35 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 165
+    mean        : 25.943047
+    std         : 42.580303
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_00000_flair_66.png
+    dimensione   : 8.60 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 163
+    mean        : 23.057091
+    std         : 40.885364
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_00002_flair_69.png
+    dimensione   : 6.78 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 130
+    mean        : 17.526905
+    std         : 34.182554
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_00003_flair_0.png
+    dimensione   : 9.76 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 144
+    mean        : 28.201692
+    std         : 41.003762
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_00003_flair_10.png
+    dimensione   : 10.76 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 165
+    mean        : 32.527089
+    std         : 42.876159
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_00003_flair_15.png
+    dimensione   : 11.42 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 163
+    mean        : 34.013984
+    std         : 43.457520
+    NaN         : 0
+    Inf         : 0
+
+  FILE: BraTS2021_00003_flair_20.png
+    dimensione   : 11.85 KB
+    size        : (208, 208)
+    mode        : L
+    format      : PNG
+    shape       : (208, 208)
+    dtype       : uint8
+    min         : 0
+    max         : 164
+    mean        : 36.291605
+    std         : 45.091827
+    NaN         : 0
+    Inf         : 0
+
+======================================================================
+6. FILE PIÙ GRANDI
+======================================================================
+    15.29 KB  train\BraTS2021_00705_flair_15.png
+    15.27 KB  train\BraTS2021_00705_flair_25.png
+    15.25 KB  train\BraTS2021_00705_flair_10.png
+    15.07 KB  train\BraTS2021_00705_flair_20.png
+    15.01 KB  train\BraTS2021_00692_flair_15.png
+    14.94 KB  train\BraTS2021_00705_flair_30.png
+    14.92 KB  train\BraTS2021_00692_flair_10.png
+    14.81 KB  train\BraTS2021_00705_flair_5.png
+    14.74 KB  train\BraTS2021_00218_flair_25.png
+    14.65 KB  train\BraTS2021_00692_flair_20.png
+
+======================================================================
+7. FILE PIÙ PICCOLI
+======================================================================
+     99.00 B  readme.md
+    193.00 B  test\annotation\BraTS2021_01564_seg_50.png
+    195.00 B  test\annotation\BraTS2021_01491_seg_17.png
+    195.00 B  test\annotation\BraTS2021_01594_seg_37.png
+    195.00 B  test\annotation\BraTS2021_01643_seg_22.png
+    198.00 B  test\annotation\BraTS2021_01663_seg_37.png
+    206.00 B  test\annotation\BraTS2021_01610_seg_0.png
+    208.00 B  test\annotation\BraTS2021_01639_seg_6.png
+    210.00 B  test\annotation\BraTS2021_01522_seg_11.png
+    210.00 B  test\annotation\BraTS2021_01594_seg_57.png
+
+======================================================================
+INSPECTION COMPLETATA
+======================================================================
+
+Questo script non modifica alcun file del dataset.
+
+Report salvato in: C:\Users\catal\OneDrive\Desktop\Anomaly-Detection-in-the-Healthcare-Field\results\inspect.txt

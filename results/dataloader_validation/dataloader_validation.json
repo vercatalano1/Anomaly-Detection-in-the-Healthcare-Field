@@ -1,0 +1,30 @@
+{
+    "configuration": {
+        "img_size": 64,
+        "channels": 1,
+        "batch_size": 32,
+        "normalization": "[0,1]",
+        "augmentation": null,
+        "seed": 42
+    },
+    "train": {
+        "samples": 4211,
+        "statistics": {
+            "samples": 4211,
+            "mean_of_means": 0.09232198394639486,
+            "mean_of_stds": 0.1357478862891526,
+            "global_min": 0.0,
+            "global_max": 0.9254902005195618
+        }
+    },
+    "test": {
+        "samples": 2776,
+        "statistics": {
+            "samples": 2776,
+            "mean_of_means": 0.13467180128148903,
+            "mean_of_stds": 0.19075773409782487,
+            "global_min": 0.0,
+            "global_max": 0.9725490212440491
+        }
+    }
+}
