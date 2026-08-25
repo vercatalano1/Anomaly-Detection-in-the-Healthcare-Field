@@ -59,7 +59,7 @@ from sklearn.metrics import (
 from torch.utils.data import DataLoader
 import torch
 
-from dataloader import get_dataset
+from data_analysis.dataloader import get_dataset
 
 
 # ============================================================
