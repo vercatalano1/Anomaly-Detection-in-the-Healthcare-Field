@@ -205,8 +205,10 @@ class BraTSDataset(data.Dataset):
 
         self.labels: List[int] = []
         self.img_ids: List[str] = []
+        self.patient_ids: List[str] = []
         self.slices: List[Image.Image] = []
         self.masks: List[np.ndarray] = []
+        
 
         self.transform = (
             transform
@@ -277,6 +279,11 @@ class BraTSDataset(data.Dataset):
 
         self.img_ids = [
             os.path.splitext(file)[0]
+            for file in train_imgs
+        ]
+
+        self.patient_ids = [
+            os.path.splitext(file)[0].split("_flair_")[0]
             for file in train_imgs
         ]
 
@@ -414,6 +421,18 @@ class BraTSDataset(data.Dataset):
             +
             [
                 os.path.splitext(file)[0]
+                for file in tumor_imgs
+            ]
+        )
+
+        self.patient_ids = (
+            [
+                os.path.splitext(file)[0].split("_flair_")[0]
+                for file in normal_imgs
+            ]
+            +
+            [
+                os.path.splitext(file)[0].split("_flair_")[0]
                 for file in tumor_imgs
             ]
         )
@@ -578,6 +597,11 @@ class BraTSDataset(data.Dataset):
                 "Numero immagini e img_ids non coincide."
             )
 
+        if len(self.patient_ids) != n:
+            raise RuntimeError(
+                "Numero immagini e patient_ids non coincide."
+            )
+
         if self.mode == "test":
 
             if len(self.masks) != n:
@@ -610,12 +634,14 @@ class BraTSDataset(data.Dataset):
             img
             label
             name
+            patient_id
 
         TEST:
             img
             label
             name
             mask
+            patient_id
         """
 
         img = self.slices[index]
@@ -633,7 +659,8 @@ class BraTSDataset(data.Dataset):
             return {
                 "img": img,
                 "label": label,
-                "name": name
+                "name": name,
+                "patient_id": self.patient_ids[index]
             }
 
         # TEST
@@ -646,6 +673,7 @@ class BraTSDataset(data.Dataset):
             "img": img,
             "label": label,
             "name": name,
+            "patient_id": self.patient_ids[index],
             "mask": mask
         }
 
@@ -747,7 +775,6 @@ def get_transforms(
 
 def get_dataset(
     dataset_name: str,
-    data_root: str = "data",
     img_size: int = DEFAULT_IMG_SIZE,
     mode: str = "train"
 ) -> BraTSDataset:
@@ -862,10 +889,19 @@ if __name__ == "__main__":
 
         train_ds = get_dataset(
             dataset_name="brats",
-            data_root="data",
             img_size=64,
             mode="train"
         )
+
+        print("\nFirst TRAIN samples:")
+        for i in range(10):
+            sample = train_ds[i]
+            print(
+                f"  {i}: "
+                f"{sample['name']} -> "
+                f"{sample['patient_id']}"
+            )
+
 
         print_dataset_summary(
             train_ds,
@@ -873,6 +909,11 @@ if __name__ == "__main__":
         )
 
         sample_train = train_ds[0]
+
+        print(
+            f"TRAIN patient_id: "
+            f"{sample_train['patient_id']}"
+        )    
 
         print(
             f"TRAIN image shape: "
@@ -903,17 +944,62 @@ if __name__ == "__main__":
 
         test_ds = get_dataset(
             dataset_name="brats",
-            data_root="data",
             img_size=64,
             mode="test"
         )
 
+        #temporaneo
+        print("\n" + "=" * 70)
+        print("CHECK PATIENT IDS")
+        print("=" * 70)
+
+        print("\nPrime 30 immagini TEST:")
+
+        for i in range(min(30, len(test_ds))):
+
+            print(
+                f"{i:3d} | "
+                f"image={test_ds.img_ids[i]:40s} | "
+                f"patient={test_ds.patient_ids[i]:20s} | "
+                f"label={test_ds.labels[i]}"
+            )
+
+        print("\nNumero pazienti unici:")
+
+        patient_ids = np.asarray(test_ds.patient_ids)
+        labels = np.asarray(test_ds.labels)
+
+        print(
+            "Totale:",
+            len(np.unique(patient_ids))
+        )
+
+        print(
+            "Healthy:",
+            len(np.unique(patient_ids[labels == 0]))
+        )
+
+        print(
+            "Tumor:",
+            len(np.unique(patient_ids[labels == 1]))
+        )
+
+
+
+
+#fine test
         print_dataset_summary(
             test_ds,
             "TEST SET"
         )
 
         sample_test = test_ds[0]
+
+
+        print(
+            f"TEST patient_id: "
+            f"{sample_test['patient_id']}"
+        )
 
         print(
             f"TEST image shape: "

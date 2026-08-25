@@ -1,0 +1,124 @@
+======================================================================
+ISOLATION FOREST — PURE UNSUPERVISED BASELINE
+======================================================================
+
+METHODOLOGY
+----------------------------------------------------------------------
+Training performed exclusively on healthy samples.
+Tumor labels were NOT used during training.
+No cross-validation was performed.
+No validation set was used.
+No threshold tuning was performed on the test set.
+The native Isolation Forest threshold was evaluated.
+Additional thresholds were derived exclusively from
+the anomaly-score distribution of the healthy training set.
+
+HYPERPARAMETERS
+----------------------------------------------------------------------
+n_estimators: 200
+contamination: auto
+random_state: 42
+n_jobs: -1
+
+FEATURE ENGINEERING
+----------------------------------------------------------------------
+Training shape: (4211, 4096)
+Feature dimension: 4096
+Input representation: flattened 64x64 image
+Normalization: StandardScaler
+Scaler fitted exclusively on training data.
+
+TRAINING
+----------------------------------------------------------------------
+Train samples: 4211
+Train healthy: 4211
+Train tumor: 0
+Training time: 0.25s
+Learning paradigm: unsupervised anomaly detection.
+
+TEST SET
+----------------------------------------------------------------------
+Test samples: 2776
+Test healthy: 828
+Test tumor: 1948
+Tumor proportion: 70.17%
+
+PRIMARY SLICE-LEVEL RESULTS
+----------------------------------------------------------------------
+AUROC:             0.6704
+Average Precision: 0.7935
+
+THRESHOLD ROBUSTNESS ANALYSIS
+----------------------------------------------------------------------
+Thresholds P95/P99 are computed exclusively from
+healthy training anomaly scores.
+
+native_0
+  Threshold: 0.000000
+  Sensitivity: 0.3475
+  Specificity: 0.8273
+  Precision: 0.8256
+  F1: 0.4892
+  Balanced Accuracy: 0.5874
+
+train_p95
+  Threshold: 0.023061
+  Sensitivity: 0.2238
+  Specificity: 0.8853
+  Precision: 0.8211
+  F1: 0.3518
+  Balanced Accuracy: 0.5545
+
+train_p99
+  Threshold: 0.081551
+  Sensitivity: 0.0524
+  Specificity: 0.9589
+  Precision: 0.7500
+  F1: 0.0979
+  Balanced Accuracy: 0.5056
+
+PATIENT-LEVEL ANALYSIS
+----------------------------------------------------------------------
+Patients: 200
+Healthy patients: 1
+Tumor patients: 199
+Patient ground truth: tumor if at least one slice is tumor.
+Patient aggregation strategies:
+  - MAX
+  - P95
+  - TOP-5 MEAN
+
+max
+  AUROC: 0.5578
+  Average Precision: 0.9971
+
+p95
+  AUROC: 0.5528
+  Average Precision: 0.9971
+
+topk_mean
+  AUROC: 0.5528
+  Average Precision: 0.9971
+
+IMPORTANT:
+Patient-level results are considered exploratory because
+the current test set contains a highly imbalanced patient
+distribution.
+
+INTERPRETATION
+----------------------------------------------------------------------
+The Isolation Forest was trained exclusively on healthy
+samples without access to tumor labels.
+The primary evaluation is based on threshold-independent
+slice-level AUROC and Average Precision.
+The native IF threshold is reported as the primary binary
+decision rule.
+P95 and P99 thresholds are reported only as unsupervised
+robustness analyses because they are derived exclusively
+from the healthy training score distribution.
+Patient-level aggregation is treated as a secondary
+sensitivity analysis rather than the primary endpoint.
+
+======================================================================
+End of report
+======================================================================

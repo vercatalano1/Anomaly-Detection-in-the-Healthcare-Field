@@ -3,6 +3,7 @@
 # ============================================================
 #
 # Baseline metodologica:
+#
 #   - TRAIN: esclusivamente immagini NORMAL
 #   - TEST: NORMAL + TUMOR
 #   - Isolation Forest standard
@@ -11,11 +12,25 @@
 #   - nessun validation set
 #   - nessun threshold tuning
 #   - soglia decisionale naturale di Isolation Forest = 0
+#   - valutazione esclusivamente SLICE-LEVEL
 #
 # Obiettivo:
+#
 # valutare quanto un modello addestrato esclusivamente
 # su immagini normali riesca a identificare le immagini
 # tumorali come anomalie.
+#
+# IMPORTANTE:
+#
+# Questa implementazione rappresenta una BASELINE PURA.
+# Non vengono utilizzate:
+#
+#   - label tumorali durante il training
+#   - soglie adattive
+#   - percentile threshold
+#   - threshold tuning
+#   - aggregazioni patient-level
+#   - metriche patient-level
 #
 # ============================================================
 
@@ -25,11 +40,13 @@ import time
 from typing import Dict, Tuple
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
+
 from sklearn.metrics import (
     roc_auc_score,
     roc_curve,
@@ -45,14 +62,30 @@ import torch
 from dataloader import get_dataset
 
 
-# ==========================================================
-# CONFIGURAZIONE
-# ==========================================================
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
 SEED = 42
 
+BATCH_SIZE = 256
+
+N_ESTIMATORS = 200
+
+OUT_DIR = "results/ml_baseline"
+
+
+# ============================================================
+# RANDOM SEED
+# ============================================================
+
 np.random.seed(SEED)
 torch.manual_seed(SEED)
+
+
+# ============================================================
+# PLOT STYLE
+# ============================================================
 
 sns.set_theme(
     style="whitegrid",
@@ -62,25 +95,26 @@ sns.set_theme(
 plt.rcParams["figure.facecolor"] = "white"
 
 
-# ==========================================================
+# ============================================================
 # FEATURE EXTRACTION
-# ==========================================================
+# ============================================================
 
 def extract_features(
     dataset,
-    batch_size: int = 256
+    batch_size: int = BATCH_SIZE
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Estrae le immagini e le relative label.
+    Estrae immagini e label dal dataset.
 
     Input:
         dataset: BraTSDataset
 
     Output:
-        X: feature [N, D]
-        y: label [N]
+        X: feature matrix [N, D]
+        y: labels [N]
 
     Le immagini vengono appiattite:
+
         [1, 64, 64] -> [4096]
     """
 
@@ -99,14 +133,12 @@ def extract_features(
         imgs = batch["img"].cpu().numpy()
         labels = batch["label"].cpu().numpy()
 
-        # [B, 1, 64, 64] -> [B, 4096]
-        X_list.append(
-            imgs.reshape(
-                imgs.shape[0],
-                -1
-            )
+        X_batch = imgs.reshape(
+            imgs.shape[0],
+            -1
         )
 
+        X_list.append(X_batch)
         y_list.append(labels)
 
     X = np.concatenate(
@@ -122,43 +154,33 @@ def extract_features(
     return X, y
 
 
-# ==========================================================
-# NORMALIZATION
-# ==========================================================
+# ============================================================
+# FEATURE NORMALIZATION
+# ============================================================
 
 def normalize_features(
     X_train: np.ndarray,
-    X_test: np.ndarray,
-    scaler: StandardScaler = None
+    X_test: np.ndarray
 ) -> Tuple[
     np.ndarray,
     np.ndarray,
     StandardScaler
 ]:
     """
-    Standardizzazione delle feature.
+    Standardizza le feature.
 
-    IMPORTANTE:
-    lo scaler viene FITTATO esclusivamente sul TRAIN.
+    Lo scaler viene FITTATO esclusivamente sul TRAIN.
 
     Il TEST viene solamente trasformato.
 
-    Questo evita leakage.
+    Questo evita data leakage.
     """
 
-    if scaler is None:
+    scaler = StandardScaler()
 
-        scaler = StandardScaler()
-
-        X_train = scaler.fit_transform(
-            X_train
-        )
-
-    else:
-
-        X_train = scaler.transform(
-            X_train
-        )
+    X_train = scaler.fit_transform(
+        X_train
+    )
 
     X_test = scaler.transform(
         X_test
@@ -171,26 +193,27 @@ def normalize_features(
     )
 
 
-# ==========================================================
+# ============================================================
 # ISOLATION FOREST
-# ==========================================================
+# ============================================================
 
 def train_iforest(
     X_train: np.ndarray
 ) -> IsolationForest:
     """
-    Addestra Isolation Forest.
+    Addestra Isolation Forest esclusivamente
+    sulle immagini NORMAL.
 
     contamination="auto":
-        utilizza la configurazione standard
-        dell'algoritmo.
 
-    Nessuna informazione sulle label tumorali
-    viene utilizzata durante il training.
+        non viene fornita alcuna stima manuale
+        della proporzione di anomalie.
+
+    Le label tumorali NON vengono utilizzate.
     """
 
     model = IsolationForest(
-        n_estimators=200,
+        n_estimators=N_ESTIMATORS,
         contamination="auto",
         random_state=SEED,
         n_jobs=-1,
@@ -204,9 +227,10 @@ def train_iforest(
     return model
 
 
-# ==========================================================
-# EVALUATION
-# ==========================================================
+# ============================================================
+# SLICE-LEVEL EVALUATION
+# ============================================================
+
 def evaluate_iforest(
     model: IsolationForest,
     X_test: np.ndarray,
@@ -215,121 +239,124 @@ def evaluate_iforest(
     """
     Valuta Isolation Forest sul test set.
 
-    Metodologia:
-        - decision_function > 0  -> normal
-        - decision_function < 0  -> anomaly
-        - predict() di sklearn   -> stessa regola
+    Isolation Forest sklearn:
 
-    Per AUROC/AP il segno viene invertito:
-        score alto -> più anomalo
+        decision_function > 0 -> NORMAL
+        decision_function < 0 -> ANOMALY
 
-    Nessun threshold tuning.
+    Per ottenere uno score in cui:
+
+        score alto -> maggiore anomalia
+
+    viene utilizzato:
+
+        anomaly_score = -decision_function
+
+    La soglia naturale diventa quindi:
+
+        anomaly_score = 0
+
+    Non viene effettuato alcun threshold tuning.
     """
 
-    # ======================================================
-    # ISOLATION FOREST DECISION FUNCTION
-    # ======================================================
+    # ========================================================
+    # DECISION FUNCTION
+    # ========================================================
 
-    decision_scores = model.decision_function(X_test)
+    decision_scores = model.decision_function(
+        X_test
+    )
 
-    # decision_function:
-    #   valore alto  -> più normale
-    #   valore basso -> più anomalo
+    # Score orientato verso l'anomalia:
     #
-    # Per le metriche anomaly detection invertiamo il segno:
-    #   score alto -> più anomalo
+    # alto  -> più anomalo
+    # basso -> più normale
 
-    scores = -decision_scores
+    anomaly_scores = -decision_scores
 
-    # Soglia naturale di Isolation Forest.
-    #
-    # Sul decision_function:
-    #   > 0 = normal
-    #   < 0 = anomaly
-    #
-    # Sullo score invertito:
-    #   < 0 = normal
-    #   > 0 = anomaly
+    # ========================================================
+    # NATURAL ISOLATION FOREST THRESHOLD
+    # ========================================================
 
     threshold = 0.0
 
-    # ======================================================
-    # PREDICTION
-    # ======================================================
+    # ========================================================
+    # PREDICTIONS
+    # ========================================================
 
-    # Usiamo direttamente la predizione nativa di sklearn.
-    #
     # sklearn:
+    #
     #   +1 = normal
     #   -1 = anomaly
 
-    y_pred_raw = model.predict(X_test)
+    y_pred_raw = model.predict(
+        X_test
+    )
 
-    # Conversione:
-    #   normal  -> 0
-    #   anomaly -> 1
+    y_pred = (
+        y_pred_raw == -1
+    ).astype(int)
 
-    y_pred = (y_pred_raw == -1).astype(int)
-
-    # ======================================================
+    # ========================================================
     # CONFUSION MATRIX
-    # ======================================================
+    # ========================================================
 
     cm = confusion_matrix(
         y_test,
-        y_pred
+        y_pred,
+        labels=[0, 1]
     )
 
     tn, fp, fn, tp = cm.ravel()
 
-    # ======================================================
+    # ========================================================
     # AUROC
-    # ======================================================
+    # ========================================================
 
     auroc = roc_auc_score(
         y_test,
-        scores
+        anomaly_scores
     )
 
-    # ======================================================
+    # ========================================================
     # AVERAGE PRECISION
-    # ======================================================
+    # ========================================================
 
     ap = average_precision_score(
         y_test,
-        scores
+        anomaly_scores
     )
 
-    # ======================================================
+    # ========================================================
     # SENSITIVITY
-    # ======================================================
+    # ========================================================
 
     sensitivity = (
         tp /
         (tp + fn + 1e-8)
     )
 
-    # ======================================================
+    # ========================================================
     # SPECIFICITY
-    # ======================================================
+    # ========================================================
 
     specificity = (
         tn /
         (tn + fp + 1e-8)
     )
 
-    # ======================================================
+    # ========================================================
     # PRECISION
-    # ======================================================
+    # ========================================================
 
     precision_value = (
         tp /
         (tp + fp + 1e-8)
     )
 
-    # ======================================================
+    # ========================================================
     # F1
-    # ======================================================
+    # ========================================================
 
     f1 = (
         2 *
@@ -342,33 +369,35 @@ def evaluate_iforest(
         )
     )
 
-    # ======================================================
+    # ========================================================
     # BALANCED ACCURACY
-    # ======================================================
+    # ========================================================
 
     bacc = balanced_accuracy_score(
         y_test,
         y_pred
     )
 
-    # ======================================================
-    # ROC
-    # ======================================================
+    # ========================================================
+    # ROC CURVE
+    # ========================================================
 
     fpr, tpr, roc_thresholds = roc_curve(
         y_test,
-        scores
+        anomaly_scores
     )
 
-    # ======================================================
-    # PRECISION-RECALL
-    # ======================================================
+    # ========================================================
+    # PRECISION-RECALL CURVE
+    # ========================================================
 
-    precision_curve, recall_curve, pr_thresholds = (
-        precision_recall_curve(
-            y_test,
-            scores
-        )
+    (
+        precision_curve,
+        recall_curve,
+        pr_thresholds
+    ) = precision_recall_curve(
+        y_test,
+        anomaly_scores
     )
 
     return {
@@ -382,11 +411,11 @@ def evaluate_iforest(
         "precision_value": precision_value,
         "bacc": bacc,
 
-        # Natural IF threshold
+        # Natural threshold
         "threshold": threshold,
 
         # Scores
-        "scores": scores,
+        "scores": anomaly_scores,
         "decision_scores": decision_scores,
 
         # Predictions
@@ -400,7 +429,7 @@ def evaluate_iforest(
         "tpr": tpr,
         "roc_thresholds": roc_thresholds,
 
-        # PR
+        # Precision-Recall
         "precision": precision_curve,
         "recall": recall_curve,
         "pr_thresholds": pr_thresholds,
@@ -413,9 +442,9 @@ def evaluate_iforest(
     }
 
 
-# ==========================================================
+# ============================================================
 # MAIN RESULTS FIGURE
-# ==========================================================
+# ============================================================
 
 def plot_results(
     metrics: Dict,
@@ -423,12 +452,12 @@ def plot_results(
     out_dir: str
 ) -> None:
     """
-    Genera la figura principale 2x2.
+    Genera la figura principale 2x2:
 
-    A: anomaly score distribution
-    B: confusion matrix
-    C: ROC
-    D: Precision-Recall
+        A: anomaly score distribution
+        B: confusion matrix
+        C: ROC
+        D: Precision-Recall
     """
 
     os.makedirs(
@@ -442,33 +471,37 @@ def plot_results(
         figsize=(14, 12)
     )
 
-    # ======================================================
+    # ========================================================
     # A — SCORE DISTRIBUTION
-    # ======================================================
+    # ========================================================
 
     ax = axes[0, 0]
 
     scores = metrics["scores"]
 
-    sns.kdeplot(
-        scores[y_test == 0],
-        fill=True,
-        color="#2ca02c",
-        alpha=0.4,
-        label="Healthy",
-        ax=ax,
-        linewidth=2
-    )
+    if np.sum(y_test == 0) > 1:
 
-    sns.kdeplot(
-        scores[y_test == 1],
-        fill=True,
-        color="#d62728",
-        alpha=0.4,
-        label="Tumor",
-        ax=ax,
-        linewidth=2
-    )
+        sns.kdeplot(
+            scores[y_test == 0],
+            fill=True,
+            color="#2ca02c",
+            alpha=0.4,
+            label="Healthy",
+            ax=ax,
+            linewidth=2
+        )
+
+    if np.sum(y_test == 1) > 1:
+
+        sns.kdeplot(
+            scores[y_test == 1],
+            fill=True,
+            color="#d62728",
+            alpha=0.4,
+            label="Tumor",
+            ax=ax,
+            linewidth=2
+        )
 
     ax.axvline(
         metrics["threshold"],
@@ -476,7 +509,7 @@ def plot_results(
         color="black",
         linewidth=2,
         label=(
-            f"IF Decision Threshold = "
+            "IF Decision Threshold = "
             f"{metrics['threshold']:.3f}"
         )
     )
@@ -495,14 +528,11 @@ def plot_results(
     )
 
     ax.legend()
+    ax.grid(alpha=0.3)
 
-    ax.grid(
-        alpha=0.3
-    )
-
-    # ======================================================
+    # ========================================================
     # B — CONFUSION MATRIX
-    # ======================================================
+    # ========================================================
 
     ax = axes[0, 1]
 
@@ -542,9 +572,9 @@ def plot_results(
         fontweight="bold"
     )
 
-    # ======================================================
+    # ========================================================
     # C — ROC
-    # ======================================================
+    # ========================================================
 
     ax = axes[1, 0]
 
@@ -590,13 +620,11 @@ def plot_results(
         loc="lower right"
     )
 
-    ax.grid(
-        alpha=0.3
-    )
+    ax.grid(alpha=0.3)
 
-    # ======================================================
-    # D — PRECISION RECALL
-    # ======================================================
+    # ========================================================
+    # D — PRECISION-RECALL
+    # ========================================================
 
     ax = axes[1, 1]
 
@@ -649,9 +677,11 @@ def plot_results(
         loc="best"
     )
 
-    ax.grid(
-        alpha=0.3
-    )
+    ax.grid(alpha=0.3)
+
+    # ========================================================
+    # SAVE
+    # ========================================================
 
     plt.tight_layout()
 
@@ -673,16 +703,17 @@ def plot_results(
     )
 
 
-# ==========================================================
+# ============================================================
 # METRICS SUMMARY
-# ==========================================================
+# ============================================================
 
 def plot_metrics_summary(
     metrics: Dict,
     out_dir: str
 ) -> None:
     """
-    Tabella riassuntiva delle metriche.
+    Salva una tabella riassuntiva delle metriche
+    slice-level.
     """
 
     os.makedirs(
@@ -794,21 +825,19 @@ def plot_metrics_summary(
                 color="white"
             )
 
-        else:
+        elif i % 2 == 0:
 
-            if i % 2 == 0:
+            table[
+                (i, 0)
+            ].set_facecolor(
+                "#f0f0f0"
+            )
 
-                table[
-                    (i, 0)
-                ].set_facecolor(
-                    "#f0f0f0"
-                )
-
-                table[
-                    (i, 1)
-                ].set_facecolor(
-                    "#f0f0f0"
-                )
+            table[
+                (i, 1)
+            ].set_facecolor(
+                "#f0f0f0"
+            )
 
     plt.title(
         "Isolation Forest Performance Summary",
@@ -835,24 +864,30 @@ def plot_metrics_summary(
     )
 
 
-# ==========================================================
-# QUALITATIVE ERROR ANALYSIS
-# ==========================================================
+# ============================================================
+# SAVE SLICE-LEVEL ERROR ANALYSIS
+# ============================================================
 
 def save_error_analysis(
-    test_ds,
+    y_test: np.ndarray,
     metrics: Dict,
     out_dir: str
 ) -> None:
     """
-    Salva gli indici dei:
+    Salva le predizioni slice-level:
 
         TN
         FP
         FN
         TP
 
-    per una successiva analisi qualitativa.
+    insieme a:
+
+        index
+        true_label
+        predicted_label
+        anomaly_score
+        decision_score
 
     Non modifica il modello.
     """
@@ -863,366 +898,82 @@ def save_error_analysis(
     )
 
     y_pred = metrics["y_pred"]
+    scores = metrics["scores"]
+    decision_scores = metrics["decision_scores"]
 
-    # ------------------------------------------------------
-    # INDICI
-    # ------------------------------------------------------
-
-    tn_idx = np.where(
-        (metrics["cm"] is not None)
-    )[0] if False else None
-
-    # Ricaviamo direttamente le categorie
-    # usando le label e le predizioni.
-
-    # ATTENZIONE:
-    # test_ds deve avere lo stesso ordine
-    # utilizzato durante extract_features.
-
-    # Per evitare ambiguità, salviamo semplicemente
-    # gli indici dei campioni.
-
-    # Gli indici reali vengono recuperati in main.
-
-    return
-
-
-# ==========================================================
-# REPORT
-# ==========================================================
-
-def save_report(
-    metrics: Dict,
-    X_train: np.ndarray,
-    y_test: np.ndarray,
-    out_dir: str,
-    train_time: float
-) -> None:
-    """
-    Salva report testuale completo.
-    """
-
-    os.makedirs(
-        out_dir,
-        exist_ok=True
+    categories = np.full(
+        len(y_test),
+        "UNKNOWN",
+        dtype=object
     )
 
-    report_path = os.path.join(
+    categories[
+        (y_test == 0) &
+        (y_pred == 0)
+    ] = "TN"
+
+    categories[
+        (y_test == 0) &
+        (y_pred == 1)
+    ] = "FP"
+
+    categories[
+        (y_test == 1) &
+        (y_pred == 0)
+    ] = "FN"
+
+    categories[
+        (y_test == 1) &
+        (y_pred == 1)
+    ] = "TP"
+
+    df = pd.DataFrame({
+
+        "index":
+            np.arange(len(y_test)),
+
+        "true_label":
+            y_test,
+
+        "predicted_label":
+            y_pred,
+
+        "category":
+            categories,
+
+        "anomaly_score":
+            scores,
+
+        "decision_score":
+            decision_scores
+    })
+
+    output_path = os.path.join(
         out_dir,
-        "isolation_forest_report.txt"
+        "error_analysis.csv"
     )
 
-    with open(
-        report_path,
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        f.write(
-            "=" * 70 + "\n"
-        )
-
-        f.write(
-            "ISOLATION FOREST — PURE UNSUPERVISED BASELINE\n"
-        )
-
-        f.write(
-            "=" * 70 + "\n\n"
-        )
-
-        # --------------------------------------------------
-        # METHODOLOGY
-        # --------------------------------------------------
-
-        f.write(
-            "METHODOLOGY\n"
-        )
-
-        f.write(
-            "-" * 70 + "\n"
-        )
-
-        f.write(
-            "Training performed exclusively on healthy samples.\n"
-        )
-
-        f.write(
-            "Tumor labels were NOT used during training.\n"
-        )
-
-        f.write(
-            "No cross-validation was performed.\n"
-        )
-
-        f.write(
-            "No validation set was used for threshold tuning.\n"
-        )
-
-        f.write(
-            "The test set was used only for final evaluation.\n"
-        )
-
-        f.write(
-            "The natural Isolation Forest decision threshold was used.\n"
-        )
-
-        f.write(
-            "Decision threshold = 0.\n\n"
-        )
-
-        # --------------------------------------------------
-        # HYPERPARAMETERS
-        # --------------------------------------------------
-
-        f.write(
-            "HYPERPARAMETERS\n"
-        )
-
-        f.write(
-            "-" * 70 + "\n"
-        )
-
-        f.write(
-            "n_estimators: 200\n"
-        )
-
-        f.write(
-            "contamination: auto\n"
-        )
-
-        f.write(
-            f"random_state: {SEED}\n"
-        )
-
-        f.write(
-            "n_jobs: -1\n\n"
-        )
-
-        # --------------------------------------------------
-        # FEATURE ENGINEERING
-        # --------------------------------------------------
-
-        f.write(
-            "FEATURE ENGINEERING\n"
-        )
-
-        f.write(
-            "-" * 70 + "\n"
-        )
-
-        f.write(
-            f"Training shape: {X_train.shape}\n"
-        )
-
-        f.write(
-            f"Feature dimension: {X_train.shape[1]}\n"
-        )
-
-        f.write(
-            "Input image representation: flattened 64x64 image\n"
-        )
-
-        f.write(
-            "Normalization: StandardScaler\n"
-        )
-
-        f.write(
-            "Scaler fitted exclusively on training data.\n\n"
-        )
-
-        # --------------------------------------------------
-        # TRAINING
-        # --------------------------------------------------
-
-        f.write(
-            "TRAINING\n"
-        )
-
-        f.write(
-            "-" * 70 + "\n"
-        )
-
-        f.write(
-            f"Train samples: {X_train.shape[0]}\n"
-        )
-
-        f.write(
-            f"Training time: {train_time:.2f}s\n"
-        )
-
-        f.write(
-            "Learning paradigm: one-class / unsupervised anomaly detection.\n"
-        )
-
-        f.write(
-            "Training samples represent the normal class only.\n\n"
-        )
-
-        # --------------------------------------------------
-        # TEST
-        # --------------------------------------------------
-
-        f.write(
-            "TEST SET\n"
-        )
-
-        f.write(
-            "-" * 70 + "\n"
-        )
-
-        f.write(
-            f"Test samples: {len(y_test)}\n"
-        )
-
-        f.write(
-            f"Test healthy: {np.sum(y_test == 0)}\n"
-        )
-
-        f.write(
-            f"Test tumor: {np.sum(y_test == 1)}\n"
-        )
-
-        f.write(
-            f"Tumor proportion: {np.mean(y_test):.2%}\n\n"
-        )
-
-        # --------------------------------------------------
-        # METRICS
-        # --------------------------------------------------
-
-        f.write(
-            "METRICS\n"
-        )
-
-        f.write(
-            "-" * 70 + "\n"
-        )
-
-        f.write(
-            f"AUROC:                 "
-            f"{metrics['auroc']:.4f}\n"
-        )
-
-        f.write(
-            f"Average Precision:     "
-            f"{metrics['ap']:.4f}\n"
-        )
-
-        f.write(
-            f"F1 Score:              "
-            f"{metrics['f1']:.4f}\n"
-        )
-
-        f.write(
-            f"Sensitivity (Recall):  "
-            f"{metrics['sensitivity']:.4f}\n"
-        )
-
-        f.write(
-            f"Specificity:           "
-            f"{metrics['specificity']:.4f}\n"
-        )
-
-        f.write(
-            f"Balanced Accuracy:     "
-            f"{metrics['bacc']:.4f}\n"
-        )
-
-        f.write(
-            f"IF Decision Threshold: "
-            f"{metrics['threshold']:.4f}\n\n"
-        )
-
-        # --------------------------------------------------
-        # CONFUSION MATRIX
-        # --------------------------------------------------
-
-        f.write(
-            "CONFUSION MATRIX\n"
-        )
-
-        f.write(
-            "-" * 70 + "\n"
-        )
-
-        f.write(
-            f"True Negatives:  {metrics['tn']}\n"
-        )
-
-        f.write(
-            f"False Positives: {metrics['fp']}\n"
-        )
-
-        f.write(
-            f"False Negatives: {metrics['fn']}\n"
-        )
-
-        f.write(
-            f"True Positives:  {metrics['tp']}\n\n"
-        )
-
-        # --------------------------------------------------
-        # INTERPRETATION
-        # --------------------------------------------------
-
-        f.write(
-            "INTERPRETATION\n"
-        )
-
-        f.write(
-            "-" * 70 + "\n"
-        )
-
-        f.write(
-            "The model was trained without access to tumor labels.\n"
-        )
-
-        f.write(
-            "Tumor images were treated as potential anomalies during evaluation.\n"
-        )
-
-        f.write(
-            "The decision threshold was not optimized using the test set.\n"
-        )
-
-        f.write(
-            "The reported classification metrics therefore correspond\n"
-        )
-
-        f.write(
-            "to the native Isolation Forest decision rule.\n\n"
-        )
-
-        f.write(
-            "=" * 70 + "\n"
-        )
-
-        f.write(
-            "End of report\n"
-        )
-
-        f.write(
-            "=" * 70 + "\n"
-        )
+    df.to_csv(
+        output_path,
+        index=False
+    )
 
     print(
-        f"  ✓ Saved: {report_path}"
+        f"  ✓ Saved: {output_path}"
     )
 
 
-# ==========================================================
+# ============================================================
 # SAVE NUMERICAL RESULTS
-# ==========================================================
+# ============================================================
 
 def save_metrics_csv(
     metrics: Dict,
     out_dir: str
 ) -> None:
     """
-    Salva le metriche in formato CSV.
+    Salva le metriche slice-level in CSV.
     """
-
-    import pandas as pd
 
     os.makedirs(
         out_dir,
@@ -1284,9 +1035,345 @@ def save_metrics_csv(
     )
 
 
-# ==========================================================
+# ============================================================
+# REPORT
+# ============================================================
+
+def save_report(
+    metrics: Dict,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    y_test: np.ndarray,
+    out_dir: str,
+    train_time: float
+) -> None:
+    """
+    Salva report testuale dell'esperimento.
+    """
+
+    os.makedirs(
+        out_dir,
+        exist_ok=True
+    )
+
+    report_path = os.path.join(
+        out_dir,
+        "isolation_forest_report.txt"
+    )
+
+    with open(
+        report_path,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        f.write(
+            "=" * 70 + "\n"
+        )
+
+        f.write(
+            "ISOLATION FOREST — PURE UNSUPERVISED BASELINE\n"
+        )
+
+        f.write(
+            "=" * 70 + "\n\n"
+        )
+
+        # ====================================================
+        # METHODOLOGY
+        # ====================================================
+
+        f.write(
+            "METHODOLOGY\n"
+        )
+
+        f.write(
+            "-" * 70 + "\n"
+        )
+
+        f.write(
+            "Training performed exclusively on healthy samples.\n"
+        )
+
+        f.write(
+            "Tumor labels were NOT used during training.\n"
+        )
+
+        f.write(
+            "No cross-validation was performed.\n"
+        )
+
+        f.write(
+            "No validation set was used.\n"
+        )
+
+        f.write(
+            "No threshold tuning was performed.\n"
+        )
+
+        f.write(
+            "The test set was used only for final evaluation.\n"
+        )
+
+        f.write(
+            "The native Isolation Forest decision rule was used.\n"
+        )
+
+        f.write(
+            "Decision threshold = 0.\n\n"
+        )
+
+        # ====================================================
+        # HYPERPARAMETERS
+        # ====================================================
+
+        f.write(
+            "HYPERPARAMETERS\n"
+        )
+
+        f.write(
+            "-" * 70 + "\n"
+        )
+
+        f.write(
+            f"n_estimators: {N_ESTIMATORS}\n"
+        )
+
+        f.write(
+            "contamination: auto\n"
+        )
+
+        f.write(
+            f"random_state: {SEED}\n"
+        )
+
+        f.write(
+            "n_jobs: -1\n\n"
+        )
+
+        # ====================================================
+        # FEATURE ENGINEERING
+        # ====================================================
+
+        f.write(
+            "FEATURE REPRESENTATION\n"
+        )
+
+        f.write(
+            "-" * 70 + "\n"
+        )
+
+        f.write(
+            f"Training shape: {X_train.shape}\n"
+        )
+
+        f.write(
+            f"Feature dimension: {X_train.shape[1]}\n"
+        )
+
+        f.write(
+            "Input representation: flattened 64x64 grayscale image\n"
+        )
+
+        f.write(
+            "Normalization: StandardScaler\n"
+        )
+
+        f.write(
+            "Scaler fitted exclusively on training data.\n\n"
+        )
+
+        # ====================================================
+        # TRAINING
+        # ====================================================
+
+        f.write(
+            "TRAINING\n"
+        )
+
+        f.write(
+            "-" * 70 + "\n"
+        )
+
+        f.write(
+            f"Train samples: {X_train.shape[0]}\n"
+        )
+
+        f.write(
+            f"Train healthy: {np.sum(y_train == 0)}\n"
+        )
+
+        f.write(
+            f"Train tumor: {np.sum(y_train == 1)}\n"
+        )
+
+        f.write(
+            f"Training time: {train_time:.2f}s\n"
+        )
+
+        f.write(
+            "Learning paradigm: unsupervised anomaly detection.\n"
+        )
+
+        f.write(
+            "Training samples represent the normal class only.\n\n"
+        )
+
+        # ====================================================
+        # TEST
+        # ====================================================
+
+        f.write(
+            "TEST SET\n"
+        )
+
+        f.write(
+            "-" * 70 + "\n"
+        )
+
+        f.write(
+            f"Test samples: {len(y_test)}\n"
+        )
+
+        f.write(
+            f"Test healthy: {np.sum(y_test == 0)}\n"
+        )
+
+        f.write(
+            f"Test tumor: {np.sum(y_test == 1)}\n"
+        )
+
+        f.write(
+            f"Tumor proportion: {np.mean(y_test):.2%}\n\n"
+        )
+
+        # ====================================================
+        # SLICE-LEVEL METRICS
+        # ====================================================
+
+        f.write(
+            "SLICE-LEVEL METRICS\n"
+        )
+
+        f.write(
+            "-" * 70 + "\n"
+        )
+
+        f.write(
+            f"AUROC:                 "
+            f"{metrics['auroc']:.4f}\n"
+        )
+
+        f.write(
+            f"Average Precision:     "
+            f"{metrics['ap']:.4f}\n"
+        )
+
+        f.write(
+            f"F1 Score:              "
+            f"{metrics['f1']:.4f}\n"
+        )
+
+        f.write(
+            f"Sensitivity (Recall):  "
+            f"{metrics['sensitivity']:.4f}\n"
+        )
+
+        f.write(
+            f"Specificity:           "
+            f"{metrics['specificity']:.4f}\n"
+        )
+
+        f.write(
+            f"Balanced Accuracy:     "
+            f"{metrics['bacc']:.4f}\n"
+        )
+
+        f.write(
+            f"IF Decision Threshold: "
+            f"{metrics['threshold']:.4f}\n\n"
+        )
+
+        # ====================================================
+        # CONFUSION MATRIX
+        # ====================================================
+
+        f.write(
+            "SLICE-LEVEL CONFUSION MATRIX\n"
+        )
+
+        f.write(
+            "-" * 70 + "\n"
+        )
+
+        f.write(
+            f"True Negatives:  {metrics['tn']}\n"
+        )
+
+        f.write(
+            f"False Positives: {metrics['fp']}\n"
+        )
+
+        f.write(
+            f"False Negatives: {metrics['fn']}\n"
+        )
+
+        f.write(
+            f"True Positives:  {metrics['tp']}\n\n"
+        )
+
+        # ====================================================
+        # INTERPRETATION
+        # ====================================================
+
+        f.write(
+            "INTERPRETATION\n"
+        )
+
+        f.write(
+            "-" * 70 + "\n"
+        )
+
+        f.write(
+            "The model was trained without access to tumor labels.\n"
+        )
+
+        f.write(
+            "Tumor images were treated as potential anomalies during evaluation.\n"
+        )
+
+        f.write(
+            "No test-set threshold optimization was performed.\n"
+        )
+
+        f.write(
+            "Classification metrics correspond to the native\n"
+        )
+
+        f.write(
+            "Isolation Forest decision rule.\n\n"
+        )
+
+        f.write(
+            "=" * 70 + "\n"
+        )
+
+        f.write(
+            "End of report\n"
+        )
+
+        f.write(
+            "=" * 70 + "\n"
+        )
+
+    print(
+        f"  ✓ Saved: {report_path}"
+    )
+
+
+# ============================================================
 # MAIN EXPERIMENT
-# ==========================================================
+# ============================================================
 
 def run_experiment() -> None:
 
@@ -1305,18 +1392,14 @@ def run_experiment() -> None:
         "=" * 70
     )
 
-    out_dir = (
-        "results/isolation_forest"
-    )
-
     os.makedirs(
-        out_dir,
+        OUT_DIR,
         exist_ok=True
     )
 
-    # ======================================================
+    # ========================================================
     # 1. DATA LOADING
-    # ======================================================
+    # ========================================================
 
     print(
         "\n[1/5] Loading datasets..."
@@ -1326,13 +1409,11 @@ def run_experiment() -> None:
 
     train_ds = get_dataset(
         "brats",
-        data_root="data",
         mode="train"
     )
 
     test_ds = get_dataset(
         "brats",
-        data_root="data",
         mode="test"
     )
 
@@ -1349,9 +1430,9 @@ def run_experiment() -> None:
         f"{time.time() - t0:.2f}s"
     )
 
-    # ======================================================
+    # ========================================================
     # 2. FEATURE EXTRACTION
-    # ======================================================
+    # ========================================================
 
     print(
         "\n[2/5] Feature extraction..."
@@ -1378,13 +1459,13 @@ def run_experiment() -> None:
     )
 
     print(
-        f"  ✓ Train labels:"
-        f" {np.unique(y_train, return_counts=True)}"
+        f"  ✓ Train labels: "
+        f"{np.unique(y_train, return_counts=True)}"
     )
 
     print(
-        f"  ✓ Test labels:"
-        f" {np.unique(y_test, return_counts=True)}"
+        f"  ✓ Test labels: "
+        f"{np.unique(y_test, return_counts=True)}"
     )
 
     print(
@@ -1392,9 +1473,28 @@ def run_experiment() -> None:
         f"{time.time() - t0:.2f}s"
     )
 
-    # ======================================================
+    # ========================================================
+    # VERIFY TRAINING LABELS
+    # ========================================================
+
+    if not np.all(
+        y_train == 0
+    ):
+
+        raise ValueError(
+            "ERROR: il training set contiene "
+            "campioni tumorali. "
+            "Per questa baseline il TRAIN "
+            "deve contenere esclusivamente NORMAL."
+        )
+
+    print(
+        "  ✓ Verified: TRAIN contains NORMAL samples only."
+    )
+
+    # ========================================================
     # 3. NORMALIZATION
-    # ======================================================
+    # ========================================================
 
     print(
         "\n[3/5] Feature normalization..."
@@ -1422,9 +1522,9 @@ def run_experiment() -> None:
         f"{time.time() - t0:.2f}s"
     )
 
-    # ======================================================
+    # ========================================================
     # 4. TRAINING
-    # ======================================================
+    # ========================================================
 
     print(
         "\n[4/5] Training Isolation Forest..."
@@ -1436,6 +1536,10 @@ def run_experiment() -> None:
 
     print(
         "  contamination = auto"
+    )
+
+    print(
+        "  Decision threshold = 0"
     )
 
     print(
@@ -1457,9 +1561,9 @@ def run_experiment() -> None:
         f"{train_time:.2f}s"
     )
 
-    # ======================================================
+    # ========================================================
     # 5. EVALUATION
-    # ======================================================
+    # ========================================================
 
     print(
         "\n[5/5] Evaluation on independent test set..."
@@ -1477,12 +1581,16 @@ def run_experiment() -> None:
         time.time() - t0
     )
 
-    # ------------------------------------------------------
-    # PRINT METRICS
-    # ------------------------------------------------------
+    # ========================================================
+    # SLICE-LEVEL RESULTS
+    # ========================================================
 
     print(
-        f"\n  AUROC: "
+        "\n  SLICE-LEVEL RESULTS"
+    )
+
+    print(
+        f"  AUROC: "
         f"{metrics['auroc']:.4f}"
     )
 
@@ -1516,14 +1624,9 @@ def run_experiment() -> None:
         f"{metrics['threshold']:.4f}"
     )
 
-    print(
-        f"  Evaluation time: "
-        f"{eval_time:.2f}s"
-    )
-
-    # ======================================================
+    # ========================================================
     # CONFUSION MATRIX
-    # ======================================================
+    # ========================================================
 
     print(
         "\n  CONFUSION MATRIX"
@@ -1545,9 +1648,14 @@ def run_experiment() -> None:
         f"    TP: {metrics['tp']}"
     )
 
-    # ======================================================
+    print(
+        f"\n  Evaluation time: "
+        f"{eval_time:.2f}s"
+    )
+
+    # ========================================================
     # VISUALIZATION
-    # ======================================================
+    # ========================================================
 
     print(
         "\n[VISUALIZATION] Generating plots..."
@@ -1556,17 +1664,31 @@ def run_experiment() -> None:
     plot_results(
         metrics,
         y_test,
-        out_dir
+        OUT_DIR
     )
 
     plot_metrics_summary(
         metrics,
-        out_dir
+        OUT_DIR
     )
 
-    # ======================================================
+    # ========================================================
+    # ERROR ANALYSIS
+    # ========================================================
+
+    print(
+        "\n[ERROR ANALYSIS] Saving slice-level predictions..."
+    )
+
+    save_error_analysis(
+        y_test=y_test,
+        metrics=metrics,
+        out_dir=OUT_DIR
+    )
+
+    # ========================================================
     # SAVE METRICS
-    # ======================================================
+    # ========================================================
 
     print(
         "\n[RESULTS] Saving numerical metrics..."
@@ -1574,28 +1696,29 @@ def run_experiment() -> None:
 
     save_metrics_csv(
         metrics,
-        out_dir
+        OUT_DIR
     )
 
-    # ======================================================
+    # ========================================================
     # REPORT
-    # ======================================================
+    # ========================================================
 
     print(
         "\n[REPORTING] Saving report..."
     )
 
     save_report(
-        metrics,
-        X_train,
-        y_test,
-        out_dir,
-        train_time
+        metrics=metrics,
+        X_train=X_train,
+        y_train=y_train,
+        y_test=y_test,
+        out_dir=OUT_DIR,
+        train_time=train_time
     )
 
-    # ======================================================
+    # ========================================================
     # SUMMARY
-    # ======================================================
+    # ========================================================
 
     total_time = (
         time.time() -
@@ -1622,7 +1745,7 @@ def run_experiment() -> None:
 
     print(
         f"Output directory: "
-        f"{out_dir}/"
+        f"{OUT_DIR}/"
     )
 
     print(
@@ -1639,6 +1762,10 @@ def run_experiment() -> None:
 
     print(
         "  • isolation_forest_metrics.csv"
+    )
+
+    print(
+        "  • error_analysis.csv"
     )
 
     print(
@@ -1670,7 +1797,15 @@ def run_experiment() -> None:
     )
 
     print(
+        "  • Validation set: NO"
+    )
+
+    print(
         "  • Decision threshold: 0"
+    )
+
+    print(
+        "  • Evaluation: SLICE-LEVEL ONLY"
     )
 
     print(
@@ -1680,9 +1815,9 @@ def run_experiment() -> None:
     )
 
 
-# ==========================================================
+# ============================================================
 # ENTRY POINT
-# ==========================================================
+# ============================================================
 
 if __name__ == "__main__":
 
