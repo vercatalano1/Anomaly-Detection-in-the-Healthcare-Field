@@ -36,6 +36,7 @@
 
 
 import os
+import sys
 import time
 from typing import Dict, Tuple
 
@@ -59,6 +60,15 @@ from sklearn.metrics import (
 from torch.utils.data import DataLoader
 import torch
 
+# 1. Trova il percorso assoluto della cartella 'ml'
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 2. Trova la cartella "padre" (la root del tuo progetto)
+parent_dir = os.path.dirname(current_dir)
+
+# 3. Aggiunge la cartella padre ai percorsi di sistema di Python
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
 from data_analysis.dataloader import get_dataset
 
 

@@ -184,7 +184,8 @@ class BraTSDataset(data.Dataset):
         main_path: str,
         img_size: int = DEFAULT_IMG_SIZE,
         transform: Optional[Callable] = None,
-        mode: str = "train"
+        mode: str = "train",
+        return_original: bool = False
     ) -> None:
 
         super().__init__()
@@ -208,6 +209,7 @@ class BraTSDataset(data.Dataset):
         self.patient_ids: List[str] = []
         self.slices: List[Image.Image] = []
         self.masks: List[np.ndarray] = []
+        self.return_original = return_original
         
 
         self.transform = (
@@ -460,6 +462,11 @@ class BraTSDataset(data.Dataset):
             resample="nearest"
         )
 
+        if len(tumor_mask_images) != len(tumor_imgs):
+            raise RuntimeError(
+                "Numero di maschere e immagini tumorali non coincide."
+            )
+
         tumor_masks_np = []
 
         for mask in tumor_mask_images:
@@ -481,6 +488,11 @@ class BraTSDataset(data.Dataset):
             normal_masks +
             tumor_masks_np
         )
+
+        if len(self.masks) != len(self.slices):
+            raise RuntimeError(
+                "Numero totale di maschere e immagini non coincide."
+            )
 
         elapsed = time.time() - t0
 
@@ -644,9 +656,9 @@ class BraTSDataset(data.Dataset):
             patient_id
         """
 
-        img = self.slices[index]
+        img_pil = self.slices[index]
 
-        img = self.transform(img)
+        img = self.transform(img_pil)
 
         label = int(
             self.labels[index]
@@ -656,12 +668,17 @@ class BraTSDataset(data.Dataset):
 
         if self.mode == "train":
 
-            return {
+            sample = {
                 "img": img,
                 "label": label,
                 "name": name,
                 "patient_id": self.patient_ids[index]
             }
+
+            if self.return_original:
+                sample["img_original"] = transforms.ToTensor()(img_pil)
+
+            return sample
 
         # TEST
 
@@ -669,13 +686,18 @@ class BraTSDataset(data.Dataset):
             self.masks[index]
         ).float().unsqueeze(0)
 
-        return {
+        sample = {
             "img": img,
             "label": label,
             "name": name,
             "patient_id": self.patient_ids[index],
             "mask": mask
         }
+
+        if self.return_original:
+            sample["img_original"] = transforms.ToTensor()(img_pil)
+
+        return sample
 
     # ======================================================
     # LEN
@@ -776,7 +798,8 @@ def get_transforms(
 def get_dataset(
     dataset_name: str,
     img_size: int = DEFAULT_IMG_SIZE,
-    mode: str = "train"
+    mode: str = "train",
+    return_original: bool = False
 ) -> BraTSDataset:
     """
     Factory per creare il dataset.
@@ -813,7 +836,8 @@ def get_dataset(
         main_path=path,
         img_size=img_size,
         transform=transform,
-        mode=mode
+        mode=mode,
+        return_original=return_original
     )
 
 
@@ -890,7 +914,8 @@ if __name__ == "__main__":
         train_ds = get_dataset(
             dataset_name="brats",
             img_size=64,
-            mode="train"
+            mode="train",
+            return_original=True
         )
 
         print("\nFirst TRAIN samples:")
@@ -945,7 +970,8 @@ if __name__ == "__main__":
         test_ds = get_dataset(
             dataset_name="brats",
             img_size=64,
-            mode="test"
+            mode="test",
+            return_original=True
         )
 
         #temporaneo
@@ -963,6 +989,35 @@ if __name__ == "__main__":
                 f"patient={test_ds.patient_ids[i]:20s} | "
                 f"label={test_ds.labels[i]}"
             )
+
+
+        # ==================================================
+        # CHECK IMAGE / MASK CORRESPONDENCE
+        # ==================================================
+
+        print("\n" + "=" * 70)
+        print("CHECK IMAGE / MASK CORRESPONDENCE")
+        print("=" * 70)
+
+        for i in range(min(10, len(test_ds))):
+
+            if test_ds.labels[i] == 1:
+
+                image_name = test_ds.img_ids[i]
+
+                mask_pixels = int(
+                    test_ds.masks[i].sum()
+                )
+
+                print(
+                    f"{i:3d} | "
+                    f"{image_name:35s} | "
+                    f"mask pixels = {mask_pixels}"
+                )   
+
+        # ==================================================
+        # NUMERO PAZIENTI
+        # ==================================================
 
         print("\nNumero pazienti unici:")
 

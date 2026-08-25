@@ -1,0 +1,73 @@
+======================================================================
+CNN AUTOENCODER — UNSUPERVISED DEEP BASELINE
+======================================================================
+
+METHODOLOGY
+----------------------------------------------------------------------
+Training performed exclusively on healthy images.
+Tumor labels were not used during training.
+Validation contains healthy images only.
+The test set was not used for model selection.
+Tumor segmentation masks were used only for final
+pixel-level evaluation.
+
+MODEL
+----------------------------------------------------------------------
+Architecture: Convolutional Autoencoder
+Latent dimension: 128
+Input resolution: 64x64
+Input channels: 1
+Reconstruction activation: Sigmoid
+Loss: Mean Squared Error
+Optimizer: Adam
+Learning rate: 0.001
+Weight decay: 1e-05
+Batch size: 128
+Maximum epochs: 100
+Early stopping patience: 10
+
+DATASET
+----------------------------------------------------------------------
+Train samples: 4211
+Train healthy: 4211
+Test samples: 2776
+Test healthy: 828
+Test tumor: 1948
+
+TRAINING
+----------------------------------------------------------------------
+Training time: 928.69s
+Epochs completed: 65
+Best validation loss: 0.00090117
+
+IMAGE-LEVEL RESULTS
+----------------------------------------------------------------------
+AUROC:                 0.7894
+Average Precision:     0.8957
+F1:                    0.4876
+Sensitivity:           0.3280
+Specificity:           0.9589
+Balanced Accuracy:     0.6435
+Image threshold:       0.002272
+
+PIXEL-LEVEL RESULTS
+----------------------------------------------------------------------
+Pixel AUROC:           0.8811
+Pixel Average Precision: 0.2999
+Dice:                  0.3280
+IoU:                   0.1962
+Pixel Sensitivity:     0.2746
+Pixel Specificity:     0.9814
+Pixel threshold:       0.129298
+
+LEAKAGE CONTROL
+----------------------------------------------------------------------
+Tumor labels were not used during optimization.
+Tumor segmentation masks were not used during optimization.
+Image-level threshold was computed from healthy validation data.
+Pixel-level threshold was computed from healthy validation data.
+The test set was reserved for final evaluation.
+
+======================================================================
+End of report
+======================================================================
