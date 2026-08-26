@@ -1,47 +1,6 @@
 # ============================================================
-# CNN AUTOENCODER — DEEP UNSUPERVISED BASELINE
+# CNN AUTOENCODER — Denoising con la loss migliore MSE+L1
 # ============================================================
-#
-# Tesi:
-#   Studio e analisi di tecniche di anomaly detection
-#   per tumori cerebrali.
-#
-# Dataset:
-#   BraTS2021 / MedIAnomaly
-#
-# Paradigma:
-#
-#   TRAIN:
-#       esclusivamente immagini HEALTHY
-#
-#   VALIDATION:
-#       esclusivamente immagini HEALTHY
-#       utilizzata per:
-#           - early stopping
-#           - threshold selection
-#
-#   TEST:
-#       HEALTHY + TUMOR
-#       utilizzato esclusivamente per la valutazione finale
-#
-# Modello:
-#   Convolutional Autoencoder
-#
-# Image-level:
-#   anomaly_score = reconstruction MSE
-#
-# Pixel-level:
-#   anomaly_map = |input - reconstruction|
-#
-# Ground truth pixel-level:
-#   BraTS2021/test/annotation/
-#
-# Importante:
-#   Le tumor labels e le segmentation masks NON vengono
-#   utilizzate durante il training.
-#
-# ============================================================
-
 
 import os
 import re
@@ -73,12 +32,14 @@ from sklearn.metrics import (
 # 1. Trova il percorso assoluto della cartella 'ml'
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-# 2. Trova la cartella "padre" (la root del tuo progetto)
-parent_dir = os.path.dirname(current_dir)
+src_dir = os.path.dirname(os.path.dirname(current_dir))
 
-# 3. Aggiunge la cartella padre ai percorsi di sistema di Python
-if parent_dir not in sys.path:
-    sys.path.append(parent_dir)
+if src_dir not in sys.path:
+    sys.path.insert(
+        0,
+        src_dir
+    )
+
 from data_analysis.dataloader import get_dataset
 
 
@@ -92,11 +53,25 @@ BATCH_SIZE = 128
 
 NUM_EPOCHS = 100
 
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-3 
 
 WEIGHT_DECAY = 1e-5
 
-LATENT_DIM = 128
+LATENT_DIM = 256
+
+# ------------------------------------------------------------
+# DENOISING
+# ------------------------------------------------------------
+
+USE_DENOISING = True
+
+NOISE_STD = 0.02
+
+# ------------------------------------------------------------
+# LOSS
+# ------------------------------------------------------------
+
+LOSS_ALPHA = 0.5
 
 VAL_RATIO = 0.15
 
@@ -106,7 +81,7 @@ MIN_DELTA = 1e-5
 
 NUM_WORKERS = 0
 
-OUT_DIR = "results/cnn_autoencoder"
+#OUT_DIR = "results/cnn_autoencoder2"
 
 DATA_ROOT = "BraTS2021"
 
@@ -311,7 +286,7 @@ def create_train_validation_split(
 # CNN AUTOENCODER
 # ============================================================
 
-class Encoder(
+'''class Encoder(
     nn.Module
 ):
 
@@ -556,7 +531,349 @@ class ConvAutoencoder(
             z
         )
 
+        return reconstruction, z'''
+
+
+
+class Encoder(nn.Module):
+
+    def __init__(
+        self,
+        latent_dim: int = 256
+    ):
+
+        super().__init__()
+
+        self.features = nn.Sequential(
+
+            # 64 x 64 -> 32 x 32
+            nn.Conv2d(
+                1,
+                32,
+                kernel_size=3,
+                stride=2,
+                padding=1,
+                bias=False
+            ),
+
+            nn.GroupNorm(
+                8,
+                32
+            ),
+
+            nn.LeakyReLU(
+                0.2,
+                inplace=True
+            ),
+
+            # 32 x 32 -> 16 x 16
+            nn.Conv2d(
+                32,
+                64,
+                kernel_size=3,
+                stride=2,
+                padding=1,
+                bias=False
+            ),
+
+            nn.GroupNorm(
+                8,
+                64
+            ),
+
+            nn.LeakyReLU(
+                0.2,
+                inplace=True
+            ),
+
+            # 16 x 16 -> 8 x 8
+            nn.Conv2d(
+                64,
+                128,
+                kernel_size=3,
+                stride=2,
+                padding=1,
+                bias=False
+            ),
+
+            nn.GroupNorm(
+                16,
+                128
+            ),
+
+            nn.LeakyReLU(
+                0.2,
+                inplace=True
+            ),
+
+            # 8 x 8 -> 4 x 4
+            nn.Conv2d(
+                128,
+                256,
+                kernel_size=3,
+                stride=2,
+                padding=1,
+                bias=False
+            ),
+
+            nn.GroupNorm(
+                16,
+                256
+            ),
+
+            nn.LeakyReLU(
+                0.2,
+                inplace=True
+            )
+        )
+
+        '''self.fc = nn.Linear(
+            256 * 4 * 4,
+            latent_dim
+        )'''
+
+    def forward(
+        self,
+        x
+    ):
+
+        z = self.features(x)
+
+        '''x = x.flatten(
+            start_dim=1
+        )
+
+        z = self.fc(x) '''
+
+        return z
+
+
+class Decoder(nn.Module):
+
+    def __init__(
+        self,
+        latent_dim: int = 256
+    ):
+
+        super().__init__()
+
+        '''self.fc = nn.Linear(
+            latent_dim,
+            256 * 4 * 4
+        )'''
+
+        self.features = nn.Sequential(
+
+            # 4 x 4 -> 8 x 8
+            nn.ConvTranspose2d(
+                256,
+                128,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+                bias=False
+            ),
+
+            nn.GroupNorm(
+                16,
+                128
+            ),
+
+            nn.LeakyReLU(
+                0.2,
+                inplace=True
+            ),
+
+            # 8 x 8 -> 16 x 16
+            nn.ConvTranspose2d(
+                128,
+                64,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+                bias=False
+            ),
+
+            nn.GroupNorm(
+                8,
+                64
+            ),
+
+            nn.LeakyReLU(
+                0.2,
+                inplace=True
+            ),
+
+            # 16 x 16 -> 32 x 32
+            nn.ConvTranspose2d(
+                64,
+                32,
+                kernel_size=4,
+                stride=2,
+                padding=1,
+                bias=False
+            ),
+
+            nn.GroupNorm(
+                8,
+                32
+            ),
+
+            nn.LeakyReLU(
+                0.2,
+                inplace=True
+            ),
+
+            # 32 x 32 -> 64 x 64
+            nn.ConvTranspose2d(
+                32,
+                1,
+                kernel_size=4,
+                stride=2,
+                padding=1
+            ),
+            nn.Sigmoid()
+        )
+
+    def forward(
+        self,
+        z
+    ):
+
+        '''x = self.fc(z)
+
+        x = x.view(
+            -1,
+            256,
+            4,
+            4
+        )'''
+
+        x = self.features(z)
+
+        return x
+
+
+class ConvAutoencoder(nn.Module):
+
+    def __init__(
+        self,
+        latent_dim: int = 256
+    ):
+
+        super().__init__()
+
+        self.encoder = Encoder(
+            latent_dim
+        )
+
+        self.decoder = Decoder(
+            latent_dim
+        )
+
+    def forward(
+        self,
+        x
+    ):
+
+        z = self.encoder(x)
+
+        reconstruction = self.decoder(z)
+
         return reconstruction, z
+
+
+
+# ============================================================
+# DENOISING NOISE
+# ============================================================
+
+'''def add_gaussian_noise(
+    images: torch.Tensor,
+    noise_std: float = NOISE_STD
+) -> torch.Tensor:
+    """
+    Aggiunge rumore gaussiano alle immagini.
+
+    Input:
+        images: immagini pulite normalizzate in [0,1]
+
+    Output:
+        immagini rumorose normalizzate in [0,1]
+
+    Il rumore viene utilizzato esclusivamente
+    come input del denoising autoencoder.
+    """
+
+    noise = torch.randn_like(images) * noise_std
+
+    noisy_images = images + noise
+
+    noisy_images = torch.clamp(
+        noisy_images,
+        0.0,
+        1.0
+    )
+
+    return noisy_images'''
+
+def add_gaussian_noise(
+    images: torch.Tensor,
+    noise_std: float = NOISE_STD
+) -> torch.Tensor:
+    """
+    Aggiunge rumore gaussiano coarse 16x16.
+
+    Il rumore viene generato su una griglia 16x16
+    e successivamente interpolato alla risoluzione
+    originale dell'immagine.
+
+    Input:
+        images: immagini pulite normalizzate in [0,1]
+
+    Output:
+        immagini rumorose normalizzate in [0,1]
+    """
+
+    batch_size, channels, height, width = images.shape
+
+    # --------------------------------------------------------
+    # COARSE GAUSSIAN NOISE 16x16
+    # --------------------------------------------------------
+
+    coarse_noise = torch.randn(
+        batch_size,
+        channels,
+        16,
+        16,
+        device=images.device,
+        dtype=images.dtype
+    ) * noise_std
+
+    # --------------------------------------------------------
+    # UPSAMPLE ALLA RISOLUZIONE DELL'IMMAGINE
+    # --------------------------------------------------------
+
+    noise = torch.nn.functional.interpolate(
+        coarse_noise,
+        size=(height, width),
+        mode="bilinear",
+        align_corners=False
+    )
+
+    # --------------------------------------------------------
+    # AGGIUNTA DEL RUMORE
+    # --------------------------------------------------------
+
+    noisy_images = images + noise
+
+    noisy_images = torch.clamp(
+        noisy_images,
+        0.0,
+        1.0
+    )
+
+    return noisy_images
 
 
 # ============================================================
@@ -578,29 +895,47 @@ def train_one_epoch(
 
     for batch in loader:
 
-        images = batch.to(
+        clean_images = batch.to(
             DEVICE,
             dtype=torch.float32
         )
 
+        # ----------------------------------------------------
+        # CREATE NOISY INPUT
+        # ----------------------------------------------------
+
+        if USE_DENOISING:
+
+            noisy_images = add_gaussian_noise(
+                clean_images,
+                NOISE_STD
+            )
+
+        else:
+
+            noisy_images = clean_images
+
         optimizer.zero_grad()
 
+        # ----------------------------------------------------
+        # DENOISING AUTOENCODER
+        # ----------------------------------------------------
+
         reconstruction, _ = model(
-            images
+            noisy_images
         )
 
+        # Target = ORIGINAL CLEAN IMAGE
         loss = criterion(
             reconstruction,
-            images
+            clean_images
         )
 
         loss.backward()
 
         optimizer.step()
 
-        batch_size = images.size(
-            0
-        )
+        batch_size = clean_images.size(0)
 
         running_loss += (
             loss.item() *
@@ -613,7 +948,6 @@ def train_one_epoch(
         running_loss /
         max(n_samples, 1)
     )
-
 
 # ============================================================
 # VALIDATION
@@ -664,7 +998,47 @@ def evaluate_reconstruction_loss(
         max(n_samples, 1)
     )
 
+# ============================================================
+# LOSS FUNCTION
+# ============================================================
+class MSEL1Loss(nn.Module):
 
+    def __init__(
+        self,
+        alpha: float = 0.5
+    ):
+
+        super().__init__()
+
+        self.alpha = alpha
+
+        self.mse = nn.MSELoss()
+
+        self.l1 = nn.L1Loss()
+
+    def forward(
+        self,
+        reconstruction,
+        target
+    ):
+
+        mse_loss = self.mse(
+            reconstruction,
+            target
+        )
+
+        l1_loss = self.l1(
+            reconstruction,
+            target
+        )
+
+        return (
+            self.alpha * mse_loss
+            +
+            (1.0 - self.alpha) * l1_loss
+        )
+
+    
 # ============================================================
 # FULL TRAINING LOOP
 # ============================================================
@@ -675,7 +1049,9 @@ def train_model(
     val_loader: DataLoader
 ) -> Tuple[nn.Module, pd.DataFrame]:
 
-    criterion = nn.MSELoss()
+    criterion = MSEL1Loss(
+        alpha=LOSS_ALPHA
+    )
 
     optimizer = torch.optim.Adam(
         model.parameters(),
@@ -1434,7 +1810,7 @@ def plot_training_history(
     )
 
     ax.set_ylabel(
-        "MSE Reconstruction Loss"
+        "MSE + L1 Reconstruction Loss"
     )
 
     ax.set_title(
@@ -1868,13 +2244,16 @@ def plot_reconstruction_examples(
 
         # Tumor masks are stored in the same
         # order as the tumor test subset.
-        tumor_position = np.where(
+        '''tumor_position = np.where(
             test_tumor_indices == idx
         )[0][0]
 
         mask = test_masks[
             tumor_position
-        ]
+        ]'''
+
+        # Ground-truth mask corresponding to this test image
+        mask = test_masks[idx]
 
         # ----------------------------------------------------
         # Original
@@ -1924,8 +2303,18 @@ def plot_reconstruction_examples(
         # ----------------------------------------------------
 
         axes[row, 3].imshow(
+            original,
+            cmap="gray",
+            vmin=0,
+            vmax=1
+        )
+
+        axes[row, 3].imshow(
             mask,
-            cmap="gray"
+            cmap="Reds",
+            alpha=0.8,
+            vmin=0,
+            vmax=1
         )
 
         axes[row, 3].set_title(
@@ -2308,7 +2697,19 @@ def save_report(
         )
 
         f.write(
-            "Loss: Mean Squared Error\n"
+            "Loss: 0.5 * MSE + 0.5 * L1\n"
+        )
+
+        f.write(
+            f"MSE-L1 alpha: {LOSS_ALPHA}\n"
+        )
+
+        f.write(
+            f"Denoising: {USE_DENOISING}\n"
+        )
+
+        f.write(
+            f"Gaussian noise std: {NOISE_STD}\n"
         )
 
         f.write(
@@ -2539,6 +2940,7 @@ def save_report(
 # MAIN EXPERIMENT
 # ============================================================
 
+
 def run_experiment() -> None:
 
     total_start = time.time()
@@ -2549,7 +2951,7 @@ def run_experiment() -> None:
     )
 
     print(
-        " CNN AUTOENCODER — UNSUPERVISED DEEP BASELINE"
+        f" CNN AUTOENCODER — LOSS MSE+L1 CON DENOISING"
     )
 
     print(
@@ -2560,8 +2962,13 @@ def run_experiment() -> None:
         f"\nDevice: {DEVICE}"
     )
 
+    out_dir = os.path.join(
+        "results",
+        "cnn_autoencoder2_nofc_mse_l1_denoising_spaziale"
+    )
+
     os.makedirs(
-        OUT_DIR,
+        out_dir,
         exist_ok=True
     )
 
@@ -2678,6 +3085,56 @@ def run_experiment() -> None:
         test_masks,
         axis=0
     )
+
+
+    print("\n========== MASK CHECK ==========")
+    
+    print("Mask shape:", test_masks.shape)
+    print("Mask dtype:", test_masks.dtype)
+    print("Mask min:", test_masks.min())
+    print("Mask max:", test_masks.max())
+    print("Mask unique values:", np.unique(test_masks))
+    
+    print(
+        "Positive pixels:",
+        np.sum(test_masks > 0)
+    )
+    
+    print(
+        "Images with positive mask:",
+        np.sum(
+            np.sum(test_masks > 0, axis=(1, 2)) > 0
+        )
+    )
+    
+    print("===============================\n")
+    
+    
+    
+    
+    # ========================================================
+    # TUMOR MASK CHECK
+    # ========================================================
+    
+    tumor_idx = np.where(y_test == 1)[0][0]
+    
+    print("\n========== TUMOR MASK CHECK ==========")
+    
+    print("Tumor index:", tumor_idx)
+    print("Name:", test_ds[tumor_idx]["name"])
+    print("Label:", test_ds[tumor_idx]["label"])
+    
+    tumor_mask = test_ds[tumor_idx]["mask"].numpy()
+    
+    print("Original mask shape:", tumor_mask.shape)
+    print("Min:", tumor_mask.min())
+    print("Max:", tumor_mask.max())
+    print("Unique values:", np.unique(tumor_mask))
+    print("Positive pixels:", np.sum(tumor_mask > 0))
+    
+    print("======================================\n")
+    
+    
 
     print(
         f"  ✓ Test masks: {test_masks.shape}"
@@ -2849,7 +3306,7 @@ def run_experiment() -> None:
     )
 
     history_path = os.path.join(
-        OUT_DIR,
+        out_dir,
         "training_history.csv"
     )
 
@@ -2873,7 +3330,7 @@ def run_experiment() -> None:
     # ========================================================
 
     model_path = os.path.join(
-        OUT_DIR,
+        out_dir,
         "cnn_autoencoder_best.pt"
     )
 
@@ -3160,18 +3617,18 @@ def run_experiment() -> None:
 
     plot_training_history(
         history,
-        OUT_DIR
+        out_dir
     )
 
     plot_image_level_results(
         image_metrics,
         y_test,
-        OUT_DIR
+        out_dir
     )
 
     plot_pixel_level_results(
         pixel_metrics,
-        OUT_DIR
+        out_dir
     )
 
     plot_reconstruction_examples(
@@ -3181,7 +3638,7 @@ def run_experiment() -> None:
         y_test=y_test,
         test_tumor_indices=tumor_indices,
         test_masks=test_masks,
-        out_dir=OUT_DIR,
+        out_dir=out_dir,
         n_examples=5
     )
 
@@ -3198,7 +3655,7 @@ def run_experiment() -> None:
         scores=test_scores,
         y_pred=image_metrics["y_pred"],
         patient_ids=patient_ids_test,
-        out_dir=OUT_DIR
+        out_dir=out_dir
     )
 
     save_error_analysis(
@@ -3206,14 +3663,14 @@ def run_experiment() -> None:
         scores=test_scores,
         y_pred=image_metrics["y_pred"],
         patient_ids=patient_ids_test,
-        out_dir=OUT_DIR
+        out_dir=out_dir
     )
 
     save_metrics(
         image_metrics=image_metrics,
         pixel_metrics=pixel_metrics,
         history=history,
-        out_dir=OUT_DIR
+        out_dir=out_dir
     )
 
     # ========================================================
@@ -3234,7 +3691,7 @@ def run_experiment() -> None:
         pixel_metrics=pixel_metrics,
         history=history,
         train_time=train_time,
-        out_dir=OUT_DIR
+        out_dir=out_dir
     )
 
     # ========================================================
@@ -3266,7 +3723,7 @@ def run_experiment() -> None:
 
     print(
         f"Output directory: "
-        f"{OUT_DIR}/"
+        f"{out_dir}/"
     )
 
     print(
