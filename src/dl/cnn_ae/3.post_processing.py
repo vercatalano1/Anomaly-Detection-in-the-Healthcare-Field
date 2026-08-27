@@ -1,5 +1,5 @@
 # ============================================================
-# CNN AUTOENCODER — Denoising con la loss migliore MSE+L1
+# CNN AUTOENCODER — pp + Denoising con la loss migliore MSE+L1
 # ============================================================
 
 import os

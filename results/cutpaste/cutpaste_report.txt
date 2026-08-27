@@ -1,0 +1,62 @@
+======================================================================
+CUTPASTE — SELF-SUPERVISED ANOMALY DETECTION
+======================================================================
+
+METHODOLOGY
+----------------------------------------------------------------------
+Training images: healthy only.
+Validation images: healthy only.
+Test images: healthy + tumor.
+Tumor labels were not used during training or validation.
+
+Self-supervised classes:
+  0 = Normal
+  1 = CutPaste
+  2 = CutPaste-SCAR
+
+Feature representation: ResNet-18 penultimate layer.
+Density estimator: multivariate Gaussian.
+Anomaly score: squared Mahalanobis distance.
+Threshold: validation healthy P95.
+
+DATA
+----------------------------------------------------------------------
+Image size: 64x64
+Channels: 1
+Image range: [0,1]
+Train healthy: 3580
+Validation healthy: 631
+Test samples: 2776
+Test healthy: 828
+Test tumor: 1948
+
+SELF-SUPERVISED TRAINING
+----------------------------------------------------------------------
+Epochs executed: 63
+Batch size: 128
+Learning rate: 0.001
+Weight decay: 1e-05
+Training time: 11527.50s
+
+FEATURE REPRESENTATION
+----------------------------------------------------------------------
+Feature dimension: 512
+Feature samples: 3580
+
+TEST METRICS
+----------------------------------------------------------------------
+AUROC: 0.6178
+Average Precision: 0.7602
+F1: 0.2050
+Sensitivity: 0.1186
+Specificity: 0.9094
+Precision: 0.7549
+Balanced Accuracy: 0.5140
+Threshold: 2377.789088
+
+CONFUSION MATRIX
+----------------------------------------------------------------------
+TN: 753
+FP: 75
+FN: 1717
+TP: 231

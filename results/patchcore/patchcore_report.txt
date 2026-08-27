@@ -1,0 +1,25 @@
+======================================================================
+PATCHCORE — TRANSFER LEARNING ANOMALY DETECTION
+======================================================================
+
+Backbone: ResNet-18 (ImageNet Pretrained)
+Layers extracted: layer1, layer2
+Memory Bank Size: 45824 patches (Subsampling: 5.0%)
+Gaussian Blur Sigma: 2.0
+Execution time: 175.50s
+
+IMAGE-LEVEL RESULTS
+----------------------------------------------------------------------
+AUROC:                 0.9037
+Average Precision:     0.9590
+Sensitivity:           0.6458
+Specificity:           0.9517
+Threshold:             1.316290
+
+PIXEL-LEVEL RESULTS
+----------------------------------------------------------------------
+Pixel AUROC:           0.9561
+Pixel Dice:            0.3127
+Pixel Sensitivity:     0.9006
+Pixel Specificity:     0.8754
+Pixel Threshold:       0.994086

@@ -1,0 +1,9 @@
+======================================================================
+CUTPASTE — PIXEL-LEVEL ANOMALY LOCALIZATION
+======================================================================
+
+Feature layer: layer2
+Train features: (3580, 8, 8, 128)
+Pixel AUROC: 0.724147
+Pixel Dice: 0.052422
+Computation time: 85.26s
