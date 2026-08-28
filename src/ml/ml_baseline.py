@@ -137,11 +137,21 @@ def extract_features(
 
     X_list = []
     y_list = []
+    pid_list = []
 
     for batch in loader:
 
         imgs = batch["img"].cpu().numpy()
         labels = batch["label"].cpu().numpy()
+
+        # Gestisce il recupero del patient_id se presente nel batch, altrimenti mette stringhe vuote o indici
+        if "patient_id" in batch:
+            pids = batch["patient_id"]
+            if isinstance(pids, torch.Tensor):
+                pids = pids.cpu().numpy()
+        else:
+            # Fallback se il dataloader non restituisce direttamente i patient_id
+            pids = np.array(["unknown"] * len(labels))
 
         X_batch = imgs.reshape(
             imgs.shape[0],
@@ -150,6 +160,7 @@ def extract_features(
 
         X_list.append(X_batch)
         y_list.append(labels)
+        pid_list.append(pids)
 
     X = np.concatenate(
         X_list,
@@ -161,7 +172,9 @@ def extract_features(
         axis=0
     )
 
-    return X, y
+    pids = np.concatenate(pid_list, axis=0)
+
+    return X, y, pids
 
 
 # ============================================================
@@ -880,6 +893,7 @@ def plot_metrics_summary(
 
 def save_error_analysis(
     y_test: np.ndarray,
+    test_pids: np.ndarray,
     metrics: Dict,
     out_dir: str
 ) -> None:
@@ -938,24 +952,13 @@ def save_error_analysis(
     ] = "TP"
 
     df = pd.DataFrame({
-
-        "index":
-            np.arange(len(y_test)),
-
-        "true_label":
-            y_test,
-
-        "predicted_label":
-            y_pred,
-
-        "category":
-            categories,
-
-        "anomaly_score":
-            scores,
-
-        "decision_score":
-            decision_scores
+        "index": np.arange(len(y_test)),
+        "patient_id": test_pids,  # <--- AGGIUNTO QUI
+        "true_label": y_test,
+        "predicted_label": y_pred,
+        "category": categories,
+        "anomaly_score": scores,
+        "decision_score": decision_scores
     })
 
     output_path = os.path.join(
@@ -1450,11 +1453,11 @@ def run_experiment() -> None:
 
     t0 = time.time()
 
-    X_train, y_train = extract_features(
+    X_train, y_train, train_pids = extract_features(
         train_ds
     )
 
-    X_test, y_test = extract_features(
+    X_test, y_test, test_pids = extract_features(
         test_ds
     )
 
@@ -1692,6 +1695,7 @@ def run_experiment() -> None:
 
     save_error_analysis(
         y_test=y_test,
+        test_pids=test_pids,
         metrics=metrics,
         out_dir=OUT_DIR
     )

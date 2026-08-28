@@ -182,7 +182,7 @@ def extract_spatial_features(model: nn.Module, dataset, batch_size: int = BATCH_
         num_workers=NUM_WORKERS, pin_memory=torch.cuda.is_available()
     )
     model.eval()
-    feature_batches, masks = [], []
+    feature_batches, masks, patient_ids = [], [], []
 
     for batch in loader:
         images = batch["img"].float().to(DEVICE, non_blocking=True)
@@ -190,14 +190,21 @@ def extract_spatial_features(model: nn.Module, dataset, batch_size: int = BATCH_
         spatial = spatial.permute(0, 2, 3, 1).contiguous()
         feature_batches.append(spatial.cpu().numpy())
         
-        # LA CORREZIONE È QUI:
-        # Estraiamo la mask solo se esiste (nel Test c'è, nel Train no)
+        if "patient_id" in batch:
+            pids = batch["patient_id"]
+            if isinstance(pids, torch.Tensor):
+                pids = pids.cpu().numpy()
+            patient_ids.extend(pids)
+        else:
+            patient_ids.extend(["unknown"] * len(images))
+
         if "mask" in batch:
             for mask in batch["mask"]:
                 masks.append(prepare_mask(mask))
 
     features = np.concatenate(feature_batches, axis=0)
-    return features, masks
+    return features, masks, np.array(patient_ids)
+
 
 # ============================================================
 # SPATIAL GAUSSIAN DENSITY ESTIMATOR
@@ -280,7 +287,7 @@ def compute_pixel_metrics(y_true: np.ndarray, scores: np.ndarray, threshold: flo
         "tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp)
     }
 
-def compute_per_image_metrics(masks: List[np.ndarray], anomaly_maps: np.ndarray, threshold: float, labels: np.ndarray) -> pd.DataFrame:
+def compute_per_image_metrics(masks: List[np.ndarray], anomaly_maps: np.ndarray, threshold: float, labels: np.ndarray, patient_ids: np.ndarray) -> pd.DataFrame:
     rows = []
     for index in range(len(masks)):
         mask = prepare_mask(masks[index])
@@ -300,11 +307,17 @@ def compute_per_image_metrics(masks: List[np.ndarray], anomaly_maps: np.ndarray,
             iou = intersection / (union + 1e-8)
 
         rows.append({
-            "index": index, "label": int(labels[index]), "is_tumor": int(labels[index] == 1),
-            "ground_truth_pixels": int(gt_area), "predicted_anomaly_pixels": int(pred_area),
-            "dice": float(dice), "iou": float(iou)
+            "index": index, 
+            "patient_id": patient_ids[index], # <--- AGGIUNTO QUI
+            "label": int(labels[index]), 
+            "is_tumor": int(labels[index] == 1),
+            "ground_truth_pixels": int(gt_area), 
+            "predicted_anomaly_pixels": int(pred_area),
+            "dice": float(dice), 
+            "iou": float(iou)
         })
     return pd.DataFrame(rows)
+
 
 def save_heatmap(image, mask, anomaly_map, threshold, label, index, out_dir):
     os.makedirs(out_dir, exist_ok=True)
@@ -360,9 +373,9 @@ def run_pixel_level_experiment():
 
     print("\n[5/7] Extracting spatial features...")
     t0 = time.time()
-    train_features, train_masks = extract_spatial_features(model, train_healthy_ds)
-    val_features, val_masks = extract_spatial_features(model, val_healthy_ds)
-    test_features, test_masks = extract_spatial_features(model, test_ds)
+    train_features, train_masks, _ = extract_spatial_features(model, train_healthy_ds)
+    val_features, val_masks, _ = extract_spatial_features(model, val_healthy_ds)
+    test_features, test_masks, test_pids = extract_spatial_features(model, test_ds)
     feature_extraction_time = time.time() - t0
 
     print("\n[6/7] Fitting spatial Gaussian...")
@@ -388,7 +401,7 @@ def run_pixel_level_experiment():
     print(f"Pixel Dice:  {metrics['pixel_dice']:.4f}")
 
     print("\nComputing per-image metrics...")
-    per_image_df = compute_per_image_metrics(test_masks, test_maps, pixel_threshold, test_labels)
+    per_image_df = compute_per_image_metrics(test_masks, test_maps, pixel_threshold, test_labels, test_pids)
     per_image_df.to_csv(os.path.join(PIXEL_OUT_DIR, "per_image_pixel_metrics.csv"), index=False)
 
     heatmap_dir = os.path.join(PIXEL_OUT_DIR, "heatmaps")

@@ -1101,10 +1101,7 @@ def extract_features(
     model: nn.Module,
     dataset,
     batch_size: int = BATCH_SIZE
-) -> Tuple[
-    np.ndarray,
-    np.ndarray
-]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
 
     loader = DataLoader(
         dataset,
@@ -1114,54 +1111,31 @@ def extract_features(
     )
 
     model.eval()
-
     features = []
-
     labels = []
+    patient_ids = []
 
     for batch in loader:
+        images = batch["img"].float().to(DEVICE)
+        batch_labels = batch["label"].cpu().numpy()
+        
+        if "patient_id" in batch:
+            pids = batch["patient_id"]
+            if isinstance(pids, torch.Tensor):
+                pids = pids.cpu().numpy()
+            patient_ids.extend(pids)
+        else:
+            patient_ids.extend(["unknown"] * len(batch_labels))
 
-        images = batch[
-            "img"
-        ].float().to(
-            DEVICE
-        )
+        _, batch_features = model(images)
+        features.append(batch_features.cpu().numpy())
+        labels.append(batch_labels)
 
-        batch_labels = (
-            batch[
-                "label"
-            ]
-            .cpu()
-            .numpy()
-        )
+    features = np.concatenate(features, axis=0)
+    labels = np.concatenate(labels, axis=0)
+    patient_ids = np.array(patient_ids)
 
-        _, batch_features = model(
-            images
-        )
-
-        features.append(
-            batch_features.cpu().numpy()
-        )
-
-        labels.append(
-            batch_labels
-        )
-
-    features = np.concatenate(
-        features,
-        axis=0
-    )
-
-    labels = np.concatenate(
-        labels,
-        axis=0
-    )
-
-    return (
-        features,
-        labels
-    )
-
+    return features, labels, patient_ids
 
 # ============================================================
 # GAUSSIAN DENSITY ESTIMATOR
@@ -1962,6 +1936,21 @@ def save_metrics(
 
 
 # ============================================================
+# SAVE IMAGE RESULTS
+# ============================================================
+def save_image_results(test_pids, y_test, scores, out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+    df = pd.DataFrame({
+        "patient_id": test_pids,
+        "true_label": y_test,
+        "anomaly_score": scores
+    })
+    path = os.path.join(out_dir, "image_level_results.csv")
+    df.to_csv(path, index=False)
+    print(f"  ✓ Saved image-level results: {path}")
+
+
+# ============================================================
 # SAVE REPORT
 # ============================================================
 
@@ -2564,110 +2553,58 @@ def run_experiment():
         f"  ✓ Classes: {N_CLASSES}"
     )
 
+    
     # ========================================================
-    # 6. SELF-SUPERVISED TRAINING
+    # 6. TRAINING O CARICAMENTO MODELLO ESISTENTE
     # ========================================================
-
-    print(
-        "\n[6/8] Self-supervised training..."
-    )
-
-    t0 = time.time()
-
-    history, best_val_loss = (
-        train_cutpaste(
+    model_path = os.path.join(OUT_DIR, "cutpaste_best.pt")
+    
+    # Creiamo una history vuota di fallback per il report
+    history = {"train_loss": [], "train_accuracy": [], "val_loss": [], "val_accuracy": []}
+    
+    if os.path.exists(model_path):
+        print(f"\n[6/8] Trovato modello pre-addestrato in {model_path}. Saluto il training e carico i pesi!")
+        checkpoint = torch.load(model_path, map_location=DEVICE)
+        model = CutPasteModel().to(DEVICE)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.eval()
+        train_time = 0.0
+        best_val_loss = checkpoint.get("best_val_loss", 0.0)
+    else:
+        print("\n[6/8] Nessun modello trovato. Avvio Self-supervised training...")
+        model = CutPasteModel().to(DEVICE)
+        t0 = time.time()
+        history, best_val_loss = train_cutpaste(
             model=model,
             train_loader=train_loader,
             val_loader=val_loader,
             epochs=NUM_EPOCHS
         )
-    )
-
-    train_time = (
-        time.time() - t0
-    )
-
-    print(
-        f"\n✓ Best validation loss: "
-        f"{best_val_loss:.6f}"
-    )
-
-    print(
-        f"✓ Training time: "
-        f"{train_time:.2f}s"
-    )
-
-    # --------------------------------------------------------
-    # SAVE BEST MODEL
-    # --------------------------------------------------------
-
-    model_path = os.path.join(
-        OUT_DIR,
-        "cutpaste_best.pt"
-    )
-
-    torch.save(
-        {
-            "model_state_dict":
-                model.state_dict(),
-
-            "feature_dim":
-                model.feature_dim,
-
-            "image_size":
-                IMAGE_SIZE,
-
-            "n_classes":
-                N_CLASSES,
-
-            "seed":
-                SEED,
-
-            "val_ratio":
-                VAL_RATIO,
-
-            "best_val_loss":
-                best_val_loss
-        },
-        model_path
-    )
-
-    print(
-        f"✓ Saved model: {model_path}"
-    )
+        train_time = time.time() - t0
+        
+        # Salvataggio pesi
+        torch.save({
+            "model_state_dict": model.state_dict(),
+            "feature_dim": model.feature_dim,
+            "image_size": IMAGE_SIZE,
+            "n_classes": N_CLASSES,
+            "seed": SEED,
+            "val_ratio": VAL_RATIO,
+            "best_val_loss": best_val_loss
+        }, model_path)
+        print(f"✓ Saved model: {model_path}")
 
     # ========================================================
-    # 7. FEATURE SPACE + THRESHOLD
+    # 7. FEATURE SPACE + THRESHOLD (Aggiornato con patient_id)
     # ========================================================
+    print("\n[7/8] Learning healthy feature distribution...")
 
-    print(
-        "\n[7/8] Learning healthy feature distribution..."
-    )
+    train_features, train_feature_labels, _ = extract_features(model, train_healthy_ds)
+    val_features, val_feature_labels, _ = extract_features(model, val_healthy_ds)
+    test_features, y_test, test_pids = extract_features(model, test_ds)
 
-    # --------------------------------------------------------
-    # FEATURE EXTRACTION
-    # --------------------------------------------------------
+    # (Il resto del codice di fitting GDE, threshold e metriche rimane uguale...)
 
-    train_features, train_feature_labels = (
-        extract_features(
-            model,
-            train_healthy_ds
-        )
-    )
-
-    val_features, val_feature_labels = (
-        extract_features(
-            model,
-            val_healthy_ds
-        )
-    )
-
-    test_features, y_test = (
-        extract_features(
-            model,
-            test_ds
-        )
-    )
 
     # --------------------------------------------------------
     # VERIFY FEATURES
@@ -2801,6 +2738,13 @@ def run_experiment():
         y_true=y_test,
         scores=test_scores,
         threshold=threshold
+    )
+
+    save_image_results(
+        test_pids=test_pids,
+        y_test=y_test,
+        scores=test_scores,
+        out_dir=OUT_DIR
     )
 
     # ========================================================

@@ -195,8 +195,8 @@ def build_memory_bank(model: nn.Module, dataset) -> torch.Tensor:
     return memory_bank
 
 @torch.no_grad()
-def evaluate_patchcore(model: nn.Module, memory_bank: torch.Tensor, dataset) -> Tuple[np.ndarray, np.ndarray, List[np.ndarray], np.ndarray]:
-    """Valuta il dataset calcolando la distanza KNN con la Memory Bank"""
+def evaluate_patchcore(model: nn.Module, memory_bank: torch.Tensor, dataset) -> Tuple[np.ndarray, np.ndarray, List[np.ndarray], np.ndarray, np.ndarray]:
+    """Valuta il dataset calcolando la distanza KNN con la Memory Bank e raccoglie i patient_id"""
     loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
     model.eval()
     
@@ -204,10 +204,21 @@ def evaluate_patchcore(model: nn.Module, memory_bank: torch.Tensor, dataset) -> 
     anomaly_maps = []
     masks = []
     labels = []
+    patient_ids = []
 
     for batch in loader:
         images = batch["img"].float().to(DEVICE)
         labels.extend(batch["label"].numpy())
+        
+        # Recupera i patient_id dal batch se presenti
+        if "patient_id" in batch:
+            pids = batch["patient_id"]
+            if isinstance(pids, torch.Tensor):
+                pids = pids.cpu().numpy()
+            patient_ids.extend(pids)
+        else:
+            patient_ids.extend(["unknown"] * len(images))
+
         if "mask" in batch:
             for mask in batch["mask"]: masks.append(prepare_mask(mask))
 
@@ -232,10 +243,11 @@ def evaluate_patchcore(model: nn.Module, memory_bank: torch.Tensor, dataset) -> 
             anomaly_maps.append(smoothed_map)
             image_scores.append(np.max(smoothed_map)) # Max patch distance
 
-    return np.array(image_scores), np.array(anomaly_maps), masks, np.array(labels)
+    return np.array(image_scores), np.array(anomaly_maps), masks, np.array(labels), np.array(patient_ids)
+
 
 # ============================================================
-# EVALUATION METRICS
+# EVALUATION METRICS (Aggiornato con tutte le metriche richieste)
 # ============================================================
 def compute_metrics(y_true, scores, threshold):
     y_pred = (scores >= threshold).astype(int)
@@ -250,14 +262,36 @@ def compute_metrics(y_true, scores, threshold):
     f1 = 2.0 * precision * sensitivity / (precision + sensitivity + 1e-8)
     bacc = balanced_accuracy_score(y_true, y_pred)
     dice = 2.0 * tp / (2.0 * tp + fp + fn + 1e-8) if tp+fp+fn > 0 else 0.0
+    iou = tp / (tp + fp + fn + 1e-8) if (tp + fp + fn) > 0 else 0.0
 
     return {
-        "auroc": float(auroc), "ap": float(ap), "f1": float(f1),
-        "dice": float(dice), "sensitivity": float(sensitivity), 
-        "specificity": float(specificity), "precision": float(precision), 
-        "bacc": float(bacc), "threshold": float(threshold),
+        "auroc": float(auroc), 
+        "ap": float(ap), 
+        "f1": float(f1),
+        "dice": float(dice), 
+        "iou": float(iou),
+        "sensitivity": float(sensitivity), 
+        "specificity": float(specificity), 
+        "precision": float(precision), 
+        "bacc": float(bacc), 
+        "threshold": float(threshold),
         "tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp), "cm": cm
     }
+
+
+
+def save_image_results(test_pids, test_labels, test_img_scores, out_dir):
+    """Salva i risultati per-immagine con patient_id per l'analisi patient-level"""
+    os.makedirs(out_dir, exist_ok=True)
+    df = pd.DataFrame({
+        "patient_id": test_pids,
+        "true_label": test_labels,
+        "anomaly_score": test_img_scores
+    })
+    path = os.path.join(out_dir, "image_level_results.csv")
+    df.to_csv(path, index=False)
+    print(f"  ✓ Saved image-level results: {path}")
+
 
 # ============================================================
 # VISUALIZATION
@@ -279,9 +313,6 @@ def save_heatmap(image, mask, anomaly_map, threshold, label, index, out_dir):
     plt.tight_layout()
     plt.savefig(os.path.join(out_dir, f"sample_{index:05d}_label_{label}.png"), dpi=200, bbox_inches="tight")
     plt.close()
-
-
-
 
 # ============================================================
 # IMAGE-LEVEL RESULTS FIGURE
@@ -337,7 +368,6 @@ def plot_image_level_results(y_test, scores, threshold, auroc, ap, cm, out_dir):
     plt.close()
     print(f"  ✓ Saved: {path}")
 
-
 # ============================================================
 # REPORT
 # ============================================================
@@ -360,7 +390,9 @@ def save_report(metrics_img, metrics_pix, bank_size, exec_time, out_dir):
         f.write(f"Threshold:             {metrics_img['threshold']:.6f}\n\n")
         f.write("PIXEL-LEVEL RESULTS\n----------------------------------------------------------------------\n")
         f.write(f"Pixel AUROC:           {metrics_pix['auroc']:.4f}\n")
+        f.write(f"Pixel AP:              {metrics_pix['ap']:.4f}\n")
         f.write(f"Pixel Dice:            {metrics_pix['dice']:.4f}\n")
+        f.write(f"Pixel IoU:             {metrics_pix['iou']:.4f}\n")
         f.write(f"Pixel Sensitivity:     {metrics_pix['sensitivity']:.4f}\n")
         f.write(f"Pixel Specificity:     {metrics_pix['specificity']:.4f}\n")
         f.write(f"Pixel Threshold:       {metrics_pix['threshold']:.6f}\n")
@@ -395,7 +427,7 @@ def run_patchcore_experiment():
     # VALIDATION (Per trovare le soglie)
     print("\n[5/5] Scoring datasets via K-Nearest Neighbors...")
     print("  Evaluating Validation Set (to find P95 thresholds)...")
-    val_img_scores, val_maps, val_masks, _ = evaluate_patchcore(model, memory_bank, val_healthy_ds)
+    val_img_scores, val_maps, val_masks, _, _ = evaluate_patchcore(model, memory_bank, val_healthy_ds)
     
     img_threshold = float(np.percentile(val_img_scores, THRESHOLD_PERCENTILE))
     pix_threshold = float(np.percentile(val_maps.flatten(), THRESHOLD_PERCENTILE))
@@ -404,8 +436,9 @@ def run_patchcore_experiment():
 
     # TEST
     print("  Evaluating Test Set...")
-    test_img_scores, test_maps, test_masks, test_labels = evaluate_patchcore(model, memory_bank, test_ds)
+    test_img_scores, test_maps, test_masks, test_labels, test_pids = evaluate_patchcore(model, memory_bank, test_ds)
     exec_time = time.time() - t0
+    save_image_results(test_pids, test_labels, test_img_scores, OUT_DIR)
 
     # METRICS
     print("\nCalculating metrics...")
@@ -414,6 +447,18 @@ def run_patchcore_experiment():
     y_pixel = np.concatenate([m.flatten() for m in test_masks], axis=0)
     pixel_scores = np.concatenate([s.flatten() for s in test_maps], axis=0)
     metrics_pix = compute_metrics(y_pixel, pixel_scores, pix_threshold)
+    
+    
+    # Rinominiamo le chiavi pixel per coerenza con il resto del progetto se necessario
+    metrics_pix_renamed = {
+        "pixel_auroc": metrics_pix["auroc"],
+        "pixel_ap": metrics_pix["ap"],
+        "pixel_dice": metrics_pix["dice"],
+        "pixel_iou": metrics_pix["iou"],
+        "pixel_sensitivity": metrics_pix["sensitivity"],
+        "pixel_specificity": metrics_pix["specificity"],
+        "pixel_threshold": metrics_pix["threshold"]
+    }
 
     print("\n" + "=" * 70 + "\n PATCHCORE TEST RESULTS\n" + "=" * 70)
     print(f"IMAGE AUROC: {metrics_img['auroc']:.4f}")
@@ -421,9 +466,9 @@ def run_patchcore_experiment():
     print(f"PIXEL AUROC: {metrics_pix['auroc']:.4f}")
     print(f"PIXEL DICE:  {metrics_pix['dice']:.4f}")
 
-    # SAVING
+    # SAVING (Salviamo i dizionari completi con le chiavi attese dall'aggregatore)
     pd.DataFrame([metrics_img]).to_csv(os.path.join(OUT_DIR, "patchcore_image_metrics.csv"), index=False)
-    pd.DataFrame([metrics_pix]).to_csv(os.path.join(OUT_DIR, "patchcore_pixel_metrics.csv"), index=False)
+    pd.DataFrame([metrics_pix_renamed]).to_csv(os.path.join(OUT_DIR, "patchcore_pixel_metrics.csv"), index=False)
     
     save_report(metrics_img, metrics_pix, memory_bank.shape[0], exec_time, OUT_DIR)
 

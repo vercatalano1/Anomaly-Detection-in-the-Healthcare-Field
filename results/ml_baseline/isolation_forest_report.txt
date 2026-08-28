@@ -33,7 +33,7 @@ TRAINING
 Train samples: 4211
 Train healthy: 4211
 Train tumor: 0
-Training time: 0.29s
+Training time: 1.01s
 Learning paradigm: unsupervised anomaly detection.
 Training samples represent the normal class only.
 
