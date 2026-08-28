@@ -37,17 +37,25 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Trova la root del progetto in modo dinamico cercando la cartella 'results'
-CURRENT_DIR = Path(__file__).resolve().parent
+# ============================================================
+# CONFIGURAZIONE E PATH
+# ============================================================
+# Risaliamo l'albero partendo da dove si trova questo script
+current_path = Path(__file__).resolve()
 
-def find_project_root(current: Path) -> Path:
-    for parent in [current] + list(current.parents):
-        if (parent / "results").exists():
-            return parent
-    return current.parent
+# Cerchiamo la cartella "src" per capire dov'è la radice
+while current_path.name != "src" and current_path.parent != current_path:
+    current_path = current_path.parent
 
-PROJECT_ROOT = find_project_root(CURRENT_DIR)
+# La radice del progetto è la cartella "padre" di "src"
+if current_path.name == "src":
+    PROJECT_ROOT = current_path.parent
+else:
+    # Fallback generico (adatta se lo script è a 2 livelli di profondità)
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 RESULTS_DIR = PROJECT_ROOT / "results"
+
 OUT_DIR = RESULTS_DIR / "summary"
 
 # ============================================================
