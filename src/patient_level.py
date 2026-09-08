@@ -48,15 +48,13 @@ plt.rcParams["figure.facecolor"] = "white"
 COMPATIBLE_SOURCES = [
     ("Isolation Forest", "ml_baseline/error_analysis.csv"),
     ("CNN Autoencoder", "cnn_autoencoder2_nofc_mse_l1_pp/image_level_results.csv"),
-    ("CutPaste", "cutpaste/image_level_results.csv"),
     ("PatchCore", "patchcore/image_level_results.csv"),
 ]
 
-ORDER_MODELS = ["Isolation Forest", "CNN Autoencoder", "CutPaste", "PatchCore"]
+ORDER_MODELS = ["Isolation Forest", "CNN Autoencoder", "PatchCore"]
 MODEL_COLORS = {
-    "Isolation Forest": "#7f8c8d",
+    "Isolation Forest": "#f90808",
     "CNN Autoencoder": "#2ca02c",
-    "CutPaste": "#e74c3c",
     "PatchCore": "#1f77b4"
 }
 

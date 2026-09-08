@@ -3,7 +3,7 @@
 # ============================================================
 # Legge automaticamente results/summary/model_comparison.csv
 # e ordina i modelli nell'esatta sequenza in cui sono stati testati:
-# Isolation Forest -> CNN Autoencoder -> CutPaste -> PatchCore.
+# Isolation Forest -> CNN Autoencoder ->  PatchCore.
 # ============================================================
 
 import os
@@ -60,12 +60,11 @@ def load_summary() -> pd.DataFrame:
         .first()
     )
 
-    # Ordine di test stabilito: IF -> CNN Autoencoder -> CutPaste -> PatchCore
+    # Ordine di test stabilito: IF -> CNN Autoencoder ->  PatchCore
     order_mapping = {
         "Isolation Forest": 0,
         "CNN Autoencoder": 1,
-        "CutPaste": 2,
-        "PatchCore": 3
+        "PatchCore": 2
     }
     
     best_per_model["sort_idx"] = best_per_model["model"].map(order_mapping)
@@ -76,7 +75,6 @@ def short_label(model_name: str) -> str:
     labels = {
         "Isolation Forest": "Isolation Forest\n(ML Baseline)",
         "CNN Autoencoder": "CNN Autoencoder\n(Generative)",
-        "CutPaste": "CutPaste\n(Self-Supervised)",
         "PatchCore": "PatchCore\n(Transfer Learning)",
     }
     return labels.get(model_name, model_name)
@@ -290,7 +288,7 @@ def plot_computational_cost(df: pd.DataFrame) -> None:
 # ESECUZIONE PRINCIPALE
 # ============================================================
 if __name__ == "__main__":
-    print("Generating final thesis plots dynamically with custom order (IF -> CNN-AE -> CutPaste -> PatchCore)...")
+    print("Generating final thesis plots dynamically with custom order (IF -> CNN-AE -> PatchCore)...")
     
     summary = load_summary()
 

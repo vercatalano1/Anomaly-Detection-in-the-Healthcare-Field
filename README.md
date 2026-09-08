@@ -1,8 +1,8 @@
 # Anomaly Detection in the Healthcare Field
 ### Rilevamento e localizzazione non supervisionata di tumori cerebrali su risonanze magnetiche (BraTS2021)
 
-> Studio comparativo di quattro paradigmi di *anomaly detection* — Machine Learning classico,
-> Deep Learning ricostruttivo, Self-Supervised Learning e Transfer Learning — per l'identificazione
+> Studio comparativo di tre paradigmi di *anomaly detection* — Machine Learning classico,
+> Deep Learning ricostruttivo e Transfer Learning — per l'identificazione
 > e la localizzazione di tumori cerebrali a partire da slice MRI, addestrati **esclusivamente su
 > immagini sane**. 
 
@@ -17,14 +17,13 @@ per ogni possibile anomalia. L'*anomaly detection* non supervisionata affronta i
 diverso: il modello apprende esclusivamente la distribuzione del tessuto **sano**, e qualunque
 scostamento significativo da tale distribuzione viene trattato come potenziale anomalia.
 
-Questo progetto confronta, a parità di dataset e protocollo sperimentale, **quattro paradigmi**
+Questo progetto confronta, a parità di dataset e protocollo sperimentale, **tre paradigmi**
 di anomaly detection non supervisionata applicati a slice MRI cerebrali:
 
 1. **Isolation Forest** — baseline classica di machine learning su pixel grezzi
 2. **CNN Autoencoder** — approccio generativo/ricostruttivo (con quattro varianti: loss ablation,
    denoising gaussiano, denoising strutturale coarse, post-processing morfologico)
-3. **CutPaste** — apprendimento self-supervised tramite task pretestuale (Li et al., 2021)
-4. **PatchCore** — transfer learning da rete pre-addestrata su ImageNet, memory bank + KNN
+3. **PatchCore** — transfer learning da rete pre-addestrata su ImageNet, memory bank + KNN
    (Roth et al., 2022)
 
 L'obiettivo non è solo individuare l'immagine anomala (**image-level detection**), ma anche
@@ -144,26 +143,12 @@ Il modello è stato sviluppato per iterazioni successive (`src/dl/cnn_ae/`):
 | Script | Variante | Descrizione |
 |---|---|---|
 | `0.baseline.py` | Baseline (MSE) | Encoder/decoder con `BatchNorm` + `ReLU`, bottleneck lineare (`fc`), loss MSE pura |
-| `1.loss_ablation.py` | Ablation loss | Architettura fully-convolutional (`GroupNorm` + `LeakyReLU`, **senza** bottleneck lineare), confronto tra MSE / L1 / MSE+L1 |
+| `1.loss_ablation.py` | Ablation loss , confronto tra MSE / L1 / MSE+L1 |
 | `2.denoising.py` | + Denoising | Rumore gaussiano *coarse* (griglia 16×16 interpolata) iniettato in input come regolarizzazione (denoising autoencoder) |
 | `3.post_processing.py` | + Post-processing | Post-processing morfologico sulle anomaly map (rimozione componenti connesse piccole, `binary_closing`) |
 
-### 4.3 CutPaste — self-supervised learning
 
-Basato su [Li et al., CVPR 2021](https://arxiv.org/abs/2104.04015). Un backbone ResNet-18
-(adattato a input single-channel) viene addestrato su un task pretestuale a 3 classi generato
-sinteticamente a partire dalle immagini sane:
-
-- **classe 0** — immagine originale
-- **classe 1** — CutPaste (patch rettangolare tagliata e incollata altrove)
-- **classe 2** — CutPaste-SCAR (patch sottile ed elongata, tipo "graffio")
-
-Le feature del penultimo layer vengono poi modellate con una **Gaussiana multivariata**; lo score
-di anomalia è la distanza di Mahalanobis al quadrato. Una seconda fase
-(`src/dl/CutPaste/1.pixel-level.py`) estende l'approccio alla localizzazione pixel-level,
-riutilizzando le feature spaziali intermedie (`layer2`) del backbone già addestrato.
-
-### 4.4 PatchCore — transfer learning + memory bank
+### 4.3 PatchCore — transfer learning + memory bank
 
 Basato su [Roth et al., CVPR 2022](https://arxiv.org/abs/2106.08265). Nessun training è eseguito:
 si sfrutta una ResNet-18 **pre-addestrata su ImageNet** (l'input single-channel viene replicato
@@ -191,14 +176,10 @@ gaussiano (`sigma=2.0`).
 │   ├── dl/
 │   │   ├── cnn_ae/
 │   │   │   ├── 0.baseline.py        # Autoencoder con loss MSE (bottleneck lineare)
-│   │   │   ├── 1.loss_ablation.py   # Architettura fully-conv, confronto MSE / L1 / MSE+L1
+│   │   │   ├── 1.loss_ablation.py   # Confronto MSE / L1 / MSE+L1
 │   │   │   ├── 2.denoising.py       # + rumore gaussiano coarse in input
 │   │   │   ├── 3.post_processing.py # + post-processing morfologico sulle mappe
-│   │   │   └── compare.py           # Aggregazione e confronto di tutte le varianti CNN-AE
 │   │   │
-│   │   ├── CutPaste/
-│   │   │   ├── 1.baseline.py        # training self-supervised + valutazione image-level
-│   │   │   └── 1.pixel-level.py     # estensione pixel-level (feature spaziali ResNet-18)
 │   │   │
 │   │   └── PatchCore/
 │   │       └── 1.baseline.py        # memory bank + KNN su feature pre-addestrate ImageNet
@@ -210,11 +191,10 @@ gaussiano (`sigma=2.0`).
 │
 ├── results/                          # Output di ciascun esperimento (metriche, report, figure)
 │   ├── eda/                          # Report e figure dell'analisi esplorativa
+|   ├──dataloader_validation          
 │   ├── ml_baseline/                  # Isolation Forest
-│   ├── cnn_autoencoder2_nofc_*/      # Varianti del CNN Autoencoder (una cartella per variante)
-│   ├── cutpaste/                     # CutPaste (image-level + pixel-level)
+│   ├── cnn_autoencoder_/             # Varianti del CNN Autoencoder (una cartella per variante)
 │   ├── patchcore/                    # PatchCore
-│   ├── cnn_compare/                  # Confronto tra le varianti del CNN Autoencoder
 │   └── summary/                      # Tabelle e grafici comparativi finali, bootstrap CI, patient-level
 │                      
 ├── README.md
@@ -233,49 +213,26 @@ la variante di riferimento più significativa.
 
 | Modello | Variante | Img AUROC | Img AP | Img F1 | Img Sens. | Img Spec. | Pixel AUROC | Pixel Dice | Tempo |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Isolation Forest | baseline | 0.6704 | 0.7935 | 0.4892 | 0.3475 | 0.8273 | — | — | 0.3 s |
-| CNN Autoencoder | baseline (MSE) | 0.7894 | 0.8957 | 0.4876 | 0.3280 | 0.9589 | 0.8811 | 0.3280 | 929 s |
-| CNN Autoencoder | MSE+L1 + denoising + post-processing | 0.6723 | 0.8187 | 0.5129 | 0.3660 | 0.8563 | **0.9189** | 0.4778 | 133 s |
-| CutPaste | self-supervised | 0.6178 | 0.7602 | 0.2050 | 0.1186 | 0.9094 | 0.7241 | 0.0524 | 11.613 s |
-| **PatchCore** | final | **0.9037** | **0.9590** | **0.7751** | **0.6458** | 0.9517 | 0.9561 | 0.3127 | 751 s |
+| Isolation Forest | baseline | 0.6704 | 0.7935 | 0.4892 | 0.3475 | 0.8273 | — | — | **0.3 s** |
+| CNN Autoencoder | MSE+L1 + denoising + post-processing | 0.7994 | 0.9021 | 0.5469 | 0.3860 | 0.9396 | 0.9038 | **0.3768** | 820 s |
+| **PatchCore** | final | **0.9037** | **0.9590** | **0.7751** | **0.6458** | **0.9517** | **0.9561** | 0.3127 | 850 s |
 
-> Il CNN Autoencoder "baseline (MSE)" ottiene l'Img AUROC più alto tra le varianti CNN, ma è
-> anche l'architettura con bottleneck lineare (più propensa all'over-fitting sul pattern sano);
-> la variante finale con denoising coarse e post-processing è quella riportata come "modello di
-> riferimento" per la pipeline CNN-AE perché massimizza la localizzazione pixel-level (Dice),
-> obiettivo primario dell'ablation study (vedi §6.2).
 
-### 6.2 Ablation study — CNN Autoencoder (`results/cnn_compare/`)
 
-| Variante | Img AUROC | Pixel AUROC | Dice |
-|---|---:|---:|---:|
-| Baseline (MSE, bottleneck lineare) | 0.7894 | 0.8811 | 0.3280 |
-| Ablation: loss MSE (fully-conv) | 0.6473 | 0.9014 | 0.3907 |
-| Ablation: loss L1 | 0.6557 | 0.9057 | 0.3710 |
-| Ablation: loss MSE+L1 | 0.6788 | 0.9069 | 0.3764 |
-| + Denoising gaussiano pixel-wise | 0.6992 | 0.9102 | 0.4310 |
-| + Denoising strutturale (coarse 16×16) | 0.6723 | 0.9189 | 0.4449 |
-| + Post-processing morfologico | 0.6723 | 0.9189 | **0.4778** |
 
-**Osservazione:** l'architettura fully-convolutional (senza bottleneck lineare) migliora
-sistematicamente la localizzazione pixel-level rispetto alla baseline, a fronte di una detection
-image-level inizialmente peggiore, poi recuperata progressivamente da loss ibrida, denoising e
-post-processing morfologico.
-
-### 6.3 Intervalli di confidenza bootstrap (95%, N=2.000 resample)
+### 6.2 Intervalli di confidenza bootstrap (95%, N=2.000 resample)
 
 | Modello | AUROC | IC 95% | AP | IC 95% |
 |---|---:|---|---:|---|
 | Isolation Forest | 0.6704 | [0.648, 0.692] | 0.7935 | [0.773, 0.816] |
 | CNN Autoencoder | 0.6723 | [0.651, 0.693] | 0.8187 | [0.800, 0.838] |
-| CutPaste | 0.6178 | [0.595, 0.642] | 0.7602 | [0.737, 0.784] |
 | **PatchCore** | **0.9037** | [0.892, 0.914] | **0.9590** | [0.953, 0.965] |
 
 Gli intervalli di confidenza di PatchCore non si sovrappongono con quelli di nessun altro modello,
 a supporto di una superiorità robusta (non solo puntuale) rispetto alle altre tre architetture.
 Script: `src/confidence.py` → `results/summary/bootstrap_analysis/`.
 
-### 6.4 Valutazione patient-level
+### 6.3 Valutazione patient-level
 
 Oltre alla valutazione slice-level, `src/patient_level.py` aggrega gli score alla granularità del
 paziente secondo la regola clinica `patient_score = max(anomaly_score)` sulle slice del paziente
@@ -283,7 +240,7 @@ paziente secondo la regola clinica `patient_score = max(anomaly_score)` sulle sl
 per tutti i modelli compatibili. Risultati numerici e grafici (barplot slice- vs patient-level,
 curve ROC patient-level) in `results/summary/patient_level/`.
 
-### 6.5 Grafici comparativi finali
+### 6.4 Grafici comparativi finali
 
 Generati da `src/final_plot.py` in `results/summary/final_comparison/`:
 1. Confronto image-level (AUROC / AP)
@@ -300,12 +257,6 @@ Generati da `src/final_plot.py` in `results/summary/final_comparison/`:
   feature pre-addestrate su ImageNet molto più informative dei pixel grezzi o di feature apprese
   da zero su un dataset di dimensioni ridotte (4.211 immagini di train). Il vantaggio è
   statisticamente robusto (bootstrap CI non sovrapposti, §6.3).
-- **CutPaste** è il modello con le prestazioni peggiori, anche sotto la baseline Isolation Forest,
-  sia in detection sia (nettamente) in localizzazione (Dice = 0.05). Il task pretestuale (patch
-  "incollata" localmente) è concettualmente pensato per anomalie di texture in ambito industriale;
-  un tumore cerebrale altera invece anche la struttura anatomica globale della slice, non
-  catturata efficacemente da corruzioni sintetiche locali. È inoltre il modello più costoso da
-  addestrare (~3,2 h) a fronte dei risultati peggiori.
 - Il **CNN Autoencoder** mostra un buon Pixel AUROC (0.92) nella variante finale, ma un Dice più
   contenuto (0.48): la soglia P99 selezionata su validation potrebbe non essere ottimale per la
   metrica Dice; un'analisi threshold-sweep (vedi §11) potrebbe migliorare ulteriormente la
@@ -370,20 +321,16 @@ python src/dl/cnn_ae/0.baseline.py
 python src/dl/cnn_ae/1.loss_ablation.py
 python src/dl/cnn_ae/2.denoising.py
 python src/dl/cnn_ae/3.post_processing.py
-python src/dl/cnn_ae/compare.py            # confronto tra le varianti
 
-# 5. CutPaste
-python src/dl/CutPaste/1.baseline.py
-python src/dl/CutPaste/1.pixel-level.py    # richiede il modello salvato dal punto precedente
 
-# 6. PatchCore
+# 5. PatchCore
 python src/dl/PatchCore/1.baseline.py
 
-# 7. Aggregazione risultati e grafici comparativi finali
+# 6. Aggregazione risultati e grafici comparativi finali
 python src/collect_results.py
 python src/final_plot.py
 
-# 8. Estensioni statistiche e cliniche
+# 7. Estensioni statistiche e cliniche
 python src/confidence.py       # intervalli di confidenza bootstrap + forest plot
 python src/patient_level.py    # valutazione a livello di paziente
 ```
@@ -407,9 +354,7 @@ impattare gli altri.
 - **Assenza di test di significatività pairwise formalizzato:** sono disponibili intervalli di
   confidenza bootstrap per-modello (§6.3), ma non un test statistico pairwise esplicito
   (es. bootstrap sulla differenza di AUROC o DeLong test) tra coppie di modelli.
-- **CutPaste come task pretestuale generico:** non è stato adattato con corruzioni sintetiche
-  specifiche per il dominio radiologico (es. deformazioni non lineari, simulazione di intensità
-  patologiche), che potrebbero migliorarne sensibilmente le prestazioni.
+
 
 ---
 
@@ -424,8 +369,6 @@ impattare gli altri.
 - Implementazione di un **test di significatività statistica pairwise** (es. bootstrap sulla
   differenza di AUROC tra coppie di modelli, o DeLong test) a completamento degli intervalli di
   confidenza già calcolati.
-- Adattamento del task pretestuale di **CutPaste** con corruzioni sintetiche specifiche per il
-  dominio radiologico.
 - Validazione su **coorti esterne** (altri dataset BraTS o altre patologie oncologiche
   cerebrali) per verificare la generalizzazione dei risultati.
 

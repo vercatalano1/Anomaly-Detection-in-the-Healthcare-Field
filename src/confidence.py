@@ -37,11 +37,10 @@ plt.rcParams["figure.facecolor"] = "white"
 SOURCES = [
     ("Isolation Forest", "ml_baseline/error_analysis.csv"),
     ("CNN Autoencoder", "cnn_autoencoder2_nofc_mse_l1_pp/image_level_results.csv"),
-    ("CutPaste", "cutpaste/image_level_results.csv"),
     ("PatchCore", "patchcore/image_level_results.csv"),
 ]
 
-ORDER_MODELS = ["PatchCore", "CutPaste", "CNN Autoencoder", "Isolation Forest"]
+ORDER_MODELS = ["PatchCore", "CNN Autoencoder", "Isolation Forest"]
 REFERENCE_MODEL_NAME = "PatchCore"  # Il "Campione" da testare contro gli altri
 
 # ============================================================
