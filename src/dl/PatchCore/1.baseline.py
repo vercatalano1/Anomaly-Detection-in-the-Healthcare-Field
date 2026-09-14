@@ -22,6 +22,7 @@ import os
 import sys
 import time
 import random
+from scipy import ndimage
 from typing import Dict, Tuple, List
 
 import numpy as np
@@ -68,10 +69,16 @@ VAL_RATIO = 0.15
 # Core PatchCore settings
 SUBSAMPLING_RATIO = 0.05  # Percentuale di feature sane da tenere in memoria
 BLUR_SIGMA = 2.0          # Smoothing per rendere le mappe morbide
-THRESHOLD_PERCENTILE = 95 # Soglia P95
+IMAGE_THRESHOLD_PERCENTILE = 95
+PIXEL_THRESHOLD_PERCENTILE = 99
+
+POST_PROCESS_MIN_SIZE = 20
+N_VISUALIZATION_SAMPLES = 5
 
 # Output
 OUT_DIR = os.path.join("results", "patchcore")
+HEATMAP_DIR = os.path.join(OUT_DIR, "anomaly_maps")
+os.makedirs(HEATMAP_DIR, exist_ok=True)
 
 # Device
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -112,6 +119,32 @@ def prepare_image(image) -> np.ndarray:
     image = np.squeeze(np.asarray(image))
     if image.ndim != 2: raise ValueError(f"Shape immagine errata: {image.shape}")
     return image
+
+
+def post_process_anomaly_mask(
+    anomaly_map,
+    threshold,
+    min_size=20
+):
+    binary_mask = anomaly_map >= threshold
+
+    labeled_mask, _ = ndimage.label(binary_mask)
+
+    component_sizes = np.bincount(
+        labeled_mask.ravel()
+    )
+
+    keep = component_sizes >= min_size
+    keep[0] = False
+
+    binary_mask = keep[labeled_mask]
+
+    binary_mask = ndimage.binary_closing(
+        binary_mask,
+        structure=np.ones((3, 3))
+    )
+
+    return binary_mask.astype(np.uint8)
 
 # ============================================================
 # MODEL: PATCHCORE BACKBONE
@@ -278,6 +311,77 @@ def compute_metrics(y_true, scores, threshold):
         "tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp), "cm": cm
     }
 
+def compute_pixel_metrics(
+    masks,
+    anomaly_maps,
+    threshold,
+    min_size=20
+):
+    # Continuous pixel scores
+    y_true = np.concatenate(
+        [m.flatten() for m in masks]
+    ).astype(np.uint8)
+
+    y_scores = np.concatenate(
+        [m.flatten() for m in anomaly_maps]
+    )
+
+    # Threshold-free metrics
+    auroc = roc_auc_score(y_true, y_scores)
+    ap = average_precision_score(y_true, y_scores)
+
+    # Threshold + identical post-processing
+    predictions = []
+
+    for anomaly_map in anomaly_maps:
+        pred = post_process_anomaly_mask(
+            anomaly_map,
+            threshold,
+            min_size=min_size
+        )
+
+        predictions.append(pred.flatten())
+
+    y_pred = np.concatenate(predictions).astype(np.uint8)
+
+    cm = confusion_matrix(
+        y_true,
+        y_pred,
+        labels=[0, 1]
+    )
+
+    tn, fp, fn, tp = cm.ravel()
+
+    sensitivity = tp / (tp + fn + 1e-8)
+    specificity = tn / (tn + fp + 1e-8)
+    precision = tp / (tp + fp + 1e-8)
+
+    dice = (
+        2.0 * tp /
+        (2.0 * tp + fp + fn + 1e-8)
+    )
+
+    iou = (
+        tp /
+        (tp + fp + fn + 1e-8)
+    )
+
+    return {
+        "auroc": float(auroc),
+        "ap": float(ap),
+        "dice": float(dice),
+        "iou": float(iou),
+        "sensitivity": float(sensitivity),
+        "specificity": float(specificity),
+        "precision": float(precision),
+        "threshold": float(threshold),
+        "tn": int(tn),
+        "fp": int(fp),
+        "fn": int(fn),
+        "tp": int(tp),
+        "cm": cm
+    }
+
 
 
 def save_image_results(test_pids, test_labels, test_img_scores, out_dir):
@@ -296,23 +400,180 @@ def save_image_results(test_pids, test_labels, test_img_scores, out_dir):
 # ============================================================
 # VISUALIZATION
 # ============================================================
-def save_heatmap(image, mask, anomaly_map, threshold, label, index, out_dir):
-    os.makedirs(out_dir, exist_ok=True)
-    prediction = (anomaly_map >= threshold).astype(np.uint8)
+def normalize_for_visualization(anomaly_map):
+    """
+    Normalize anomaly map to [0, 1] for visualization only.
+    """
+    anomaly_map = np.asarray(
+        anomaly_map,
+        dtype=np.float32
+    )
 
-    fig, axes = plt.subplots(1, 5, figsize=(18, 4))
-    axes[0].imshow(image, cmap="gray"); axes[0].set_title("Original")
-    axes[1].imshow(image, cmap="gray"); axes[1].imshow(mask, alpha=0.5); axes[1].set_title("Ground truth")
-    im = axes[2].imshow(anomaly_map, cmap="inferno"); axes[2].set_title("PatchCore KNN Map")
-    fig.colorbar(im, ax=axes[2], fraction=0.046, pad=0.04)
-    axes[3].imshow(image, cmap="gray"); axes[3].imshow(prediction, alpha=0.5); axes[3].set_title("Prediction")
-    axes[4].imshow(image, cmap="gray"); axes[4].imshow(anomaly_map, cmap="inferno", alpha=0.55); axes[4].set_title("Overlay")
-    
-    for ax in axes: ax.axis("off")
-    fig.suptitle(f"PatchCore Localization | index={index} | label={label}")
+    min_val = anomaly_map.min()
+    max_val = anomaly_map.max()
+
+    if max_val > min_val:
+        return (
+            (anomaly_map - min_val)
+            / (max_val - min_val)
+        )
+
+    return np.zeros_like(anomaly_map)
+
+
+def save_heatmap(
+    image,
+    mask,
+    anomaly_map,
+    threshold,
+    label,
+    index,
+    out_dir
+):
+    os.makedirs(out_dir, exist_ok=True)
+
+    # ---------------------------------------------------------
+    # Save RAW anomaly map
+    # ---------------------------------------------------------
+    np.save(
+        os.path.join(
+            out_dir,
+            f"anomaly_map_{index:05d}.npy"
+        ),
+        anomaly_map
+    )
+
+    # ---------------------------------------------------------
+    # Normalize ONLY for visualization
+    # ---------------------------------------------------------
+    anomaly_map_vis = normalize_for_visualization(anomaly_map)
+
+    # ---------------------------------------------------------
+    # Binary prediction using RAW anomaly map
+    # ---------------------------------------------------------
+    prediction = post_process_anomaly_mask(
+        anomaly_map,
+        threshold,
+        min_size=POST_PROCESS_MIN_SIZE
+    )
+
+    # ---------------------------------------------------------
+    # Figure
+    # ---------------------------------------------------------
+    fig, axes = plt.subplots(
+        1,
+        5,
+        figsize=(18, 4)
+    )
+
+    # 1. Original
+    axes[0].imshow(
+        image,
+        cmap="gray",
+        vmin=0,
+        vmax=1
+    )
+    axes[0].set_title("Original")
+
+    # 2. Ground Truth
+    axes[1].imshow(
+        image,
+        cmap="gray",
+        vmin=0,
+        vmax=1
+    )
+    axes[1].imshow(
+        mask,
+        cmap="Reds",
+        alpha=0.75,
+        vmin=0,
+        vmax=1
+    )
+    axes[1].set_title("Ground Truth")
+
+    # 3. Anomaly Map
+    im = axes[2].imshow(
+        anomaly_map_vis,
+        cmap="inferno",
+        vmin=0,
+        vmax=1
+    )
+    axes[2].set_title("PatchCore Anomaly Map")
+
+    fig.colorbar(
+        im,
+        ax=axes[2],
+        fraction=0.046,
+        pad=0.04
+    )
+
+    # 4. Prediction
+    axes[3].imshow(
+        image,
+        cmap="gray",
+        vmin=0,
+        vmax=1
+    )
+    axes[3].imshow(
+        prediction,
+        cmap="Reds",
+        alpha=0.75,
+        vmin=0,
+        vmax=1
+    )
+    axes[3].set_title("Prediction")
+
+    # 5. Anomaly + GT
+    axes[4].imshow(
+        image,
+        cmap="gray",
+        vmin=0,
+        vmax=1
+    )
+    axes[4].imshow(
+        anomaly_map_vis,
+        cmap="inferno",
+        alpha=0.50,
+        vmin=0,
+        vmax=1
+    )
+
+    axes[4].contour(
+        mask,
+        levels=[0.5],
+        colors="cyan",
+        linewidths=1
+    )
+
+    axes[4].set_title("Anomaly + GT")
+
+    # Remove axes
+    for ax in axes:
+        ax.axis("off")
+
+    fig.suptitle(
+        f"PatchCore Localization | "
+        f"index={index} | "
+        f"label={label}"
+    )
+
     plt.tight_layout()
-    plt.savefig(os.path.join(out_dir, f"sample_{index:05d}_label_{label}.png"), dpi=200, bbox_inches="tight")
+
+    path = os.path.join(
+        out_dir,
+        f"localization_{index:05d}.png"
+    )
+
+    plt.savefig(
+        path,
+        dpi=300,
+        bbox_inches="tight"
+    )
+
     plt.close()
+
+    print(f"  ✓ Saved: {path}")
+
 
 # ============================================================
 # IMAGE-LEVEL RESULTS FIGURE
@@ -426,13 +687,13 @@ def run_patchcore_experiment():
 
     # VALIDATION (Per trovare le soglie)
     print("\n[5/5] Scoring datasets via K-Nearest Neighbors...")
-    print("  Evaluating Validation Set (to find P95 thresholds)...")
+    print("  Evaluating Validation Set (to find thresholds)...")
     val_img_scores, val_maps, val_masks, _, _ = evaluate_patchcore(model, memory_bank, val_healthy_ds)
     
-    img_threshold = float(np.percentile(val_img_scores, THRESHOLD_PERCENTILE))
-    pix_threshold = float(np.percentile(val_maps.flatten(), THRESHOLD_PERCENTILE))
-    print(f"  ✓ Image P95 Threshold: {img_threshold:.6f}")
-    print(f"  ✓ Pixel P95 Threshold: {pix_threshold:.6f}")
+    img_threshold = float(np.percentile(val_img_scores, IMAGE_THRESHOLD_PERCENTILE))
+    pix_threshold = float(np.percentile(val_maps.flatten(), PIXEL_THRESHOLD_PERCENTILE))
+    print(f"  ✓ Image P{IMAGE_THRESHOLD_PERCENTILE} Threshold: {img_threshold:.6f}")
+    print(f"  ✓ Pixel P{PIXEL_THRESHOLD_PERCENTILE} Threshold: {pix_threshold:.6f}")
 
     # TEST
     print("  Evaluating Test Set...")
@@ -444,9 +705,16 @@ def run_patchcore_experiment():
     print("\nCalculating metrics...")
     metrics_img = compute_metrics(test_labels, test_img_scores, img_threshold)
     
-    y_pixel = np.concatenate([m.flatten() for m in test_masks], axis=0)
+    '''y_pixel = np.concatenate([m.flatten() for m in test_masks], axis=0)
     pixel_scores = np.concatenate([s.flatten() for s in test_maps], axis=0)
-    metrics_pix = compute_metrics(y_pixel, pixel_scores, pix_threshold)
+    metrics_pix = compute_metrics(y_pixel, pixel_scores, pix_threshold)'''
+
+    metrics_pix = compute_pixel_metrics(
+    masks=test_masks,
+    anomaly_maps=test_maps,
+    threshold=pix_threshold,
+    min_size=POST_PROCESS_MIN_SIZE
+)
     
     
     # Rinominiamo le chiavi pixel per coerenza con il resto del progetto se necessario
@@ -478,15 +746,50 @@ def run_patchcore_experiment():
         metrics_img['auroc'], metrics_img['ap'], metrics_img['cm'], OUT_DIR
     )
 
-    heatmap_dir = os.path.join(OUT_DIR, "heatmaps")
-    tumor_indices = np.where(test_labels == 1)[0]
-    
     print("\nGenerating localization visualizations...")
-    # Salviamo solo 10 esempi tumorali per evitare di inondare il disco
-    for index in tumor_indices[:10]:
-        sample = test_ds[int(index)]
-        save_heatmap(prepare_image(sample["img"]), prepare_mask(sample["mask"]), 
-                     test_maps[index], pix_threshold, 1, int(index), heatmap_dir)
+
+    # Seleziona 5 slice tumorali distribuite uniformemente
+    # tra tutte le slice tumorali del test set
+    tumor_indices = np.where(test_labels == 1)[0]
+
+    n_samples = min(N_VISUALIZATION_SAMPLES, len(tumor_indices))
+
+    selected_positions = np.linspace(
+        0,
+        len(tumor_indices) - 1,
+        n_samples,
+        dtype=int
+    )
+
+    visualization_indices = tumor_indices[selected_positions]
+
+    print(
+        f"Selected visualization indices: "
+        f"{visualization_indices.tolist()}"
+    )
+
+    for index in visualization_indices:
+
+        index = int(index)
+
+        sample = test_ds[index]
+
+        print(
+            f"  Saving visualization: "
+            f"index={index}, "
+            f"patient={sample['patient_id']}, "
+            f"name={sample['name']}"
+        )
+
+        save_heatmap(
+            prepare_image(sample["img"]),
+            prepare_mask(sample["mask"]),
+            test_maps[index],
+            pix_threshold,
+            int(test_labels[index]),
+            index,
+            HEATMAP_DIR
+        )
 
     print(f"\nCOMPLETED in {time.time() - total_start:.2f}s")
 

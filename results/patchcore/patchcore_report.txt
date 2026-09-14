@@ -6,7 +6,7 @@ Backbone: ResNet-18 (ImageNet Pretrained)
 Layers extracted: layer1, layer2
 Memory Bank Size: 45824 patches (Subsampling: 5.0%)
 Gaussian Blur Sigma: 2.0
-Execution time: 426.28s
+Execution time: 157.59s
 
 IMAGE-LEVEL RESULTS
 ----------------------------------------------------------------------
@@ -20,8 +20,8 @@ PIXEL-LEVEL RESULTS
 ----------------------------------------------------------------------
 Pixel AUROC:           0.9561
 Pixel AP:              0.4593
-Pixel Dice:            0.3127
-Pixel IoU:             0.1853
-Pixel Sensitivity:     0.9006
-Pixel Specificity:     0.8754
-Pixel Threshold:       0.994086
+Pixel Dice:            0.4414
+Pixel IoU:             0.2832
+Pixel Sensitivity:     0.7190
+Pixel Specificity:     0.9503
+Pixel Threshold:       1.154063

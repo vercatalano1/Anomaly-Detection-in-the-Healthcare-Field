@@ -82,6 +82,14 @@ MIN_DELTA = 1e-5
 
 NUM_WORKERS = 0
 
+IMAGE_SIZE = 64
+IMAGE_THRESHOLD_PERCENTILE = 95
+PIXEL_THRESHOLD_PERCENTILE = 99
+POST_PROCESS_MIN_SIZE = 20
+
+# Stessi indici usati per PatchCore
+VISUALIZATION_INDICES = [828, 1314, 1801, 2288, 2775]
+
 #OUT_DIR = "results/cnn_autoencoder2"
 
 DATA_ROOT = "BraTS2021"
@@ -1170,7 +1178,7 @@ def compute_image_threshold(
 
     threshold = np.percentile(
         healthy_scores,
-        95
+        IMAGE_THRESHOLD_PERCENTILE
     )
 
     return float(
@@ -1382,7 +1390,7 @@ def compute_pixel_threshold(
 
     threshold = np.percentile(
         healthy_anomaly_maps,
-        99
+        PIXEL_THRESHOLD_PERCENTILE
     )
 
     return float(
@@ -1474,7 +1482,7 @@ def evaluate_pixel_level(
         post_process_anomaly_mask(
             anomaly_map,
             threshold,
-            min_size=20
+            min_size=POST_PROCESS_MIN_SIZE
         )
         for anomaly_map in anomaly_maps
     ])
@@ -1975,7 +1983,7 @@ def plot_pixel_level_results(
     )
 
 
-# ============================================================
+'''# ============================================================
 # RECONSTRUCTION / ANOMALY MAP VISUALIZATION
 # ============================================================
 
@@ -1993,9 +2001,8 @@ def plot_reconstruction_examples(
     Salva esempi tumorali con:
 
         original
-        reconstruction
-        anomaly map
         ground truth
+        anomaly map
         overlay
     """
 
@@ -2003,29 +2010,18 @@ def plot_reconstruction_examples(
 
         return
 
-    n = min(
-        n_examples,
-        len(test_tumor_indices)
+    selected = np.asarray(
+        VISUALIZATION_INDICES,
+         dtype=int
     )
 
-    selected = (
-        test_tumor_indices[
-            :n
-        ]
-    )
 
     fig, axes = plt.subplots(
-        n,
+        1,
         5,
-        figsize=(15, 3 * n)
+        figsize=(15, 4)
     )
 
-    if n == 1:
-
-        axes = np.expand_dims(
-            axes,
-            axis=0
-        )
 
     for row, idx in enumerate(
         selected
@@ -2050,15 +2046,6 @@ def plot_reconstruction_examples(
             ]
         )
 
-        # Tumor masks are stored in the same
-        # order as the tumor test subset.
-        '''tumor_position = np.where(
-            test_tumor_indices == idx
-        )[0][0]
-
-        mask = test_masks[
-            tumor_position
-        ]'''
 
         # Ground-truth mask corresponding to this test image
         mask = test_masks[idx]
@@ -2079,18 +2066,26 @@ def plot_reconstruction_examples(
         )
 
         # ----------------------------------------------------
-        # Reconstruction
+        # Ground truth
         # ----------------------------------------------------
-
+        
         axes[row, 1].imshow(
-            reconstruction,
+            original,
             cmap="gray",
             vmin=0,
             vmax=1
         )
-
+        
+        axes[row, 1].imshow(
+            mask,
+            cmap="Reds",
+            alpha=0.8,
+            vmin=0,
+            vmax=1
+        )
+        
         axes[row, 1].set_title(
-            "Reconstruction"
+            "Ground Truth"
         )
 
         # ----------------------------------------------------
@@ -2103,31 +2098,9 @@ def plot_reconstruction_examples(
         )
 
         axes[row, 2].set_title(
-            "Anomaly Map"
+            "CNN-AE Anomaly Map"
         )
 
-        # ----------------------------------------------------
-        # Ground truth
-        # ----------------------------------------------------
-
-        axes[row, 3].imshow(
-            original,
-            cmap="gray",
-            vmin=0,
-            vmax=1
-        )
-
-        axes[row, 3].imshow(
-            mask,
-            cmap="Reds",
-            alpha=0.8,
-            vmin=0,
-            vmax=1
-        )
-
-        axes[row, 3].set_title(
-            "Ground Truth"
-        )
 
         # ----------------------------------------------------
         # Overlay
@@ -2180,7 +2153,7 @@ def plot_reconstruction_examples(
 
     print(
         f"  ✓ Saved: {path}"
-    )
+    )'''
 
 
 # ============================================================
@@ -2744,6 +2717,27 @@ def save_report(
     )
 
 
+def normalize_for_visualization(anomaly_map):
+    """
+    Normalize anomaly map to [0, 1] for visualization only.
+    """
+    anomaly_map = np.asarray(
+        anomaly_map,
+        dtype=np.float32
+    )
+
+    min_val = anomaly_map.min()
+    max_val = anomaly_map.max()
+
+    if max_val > min_val:
+        return (
+            (anomaly_map - min_val)
+            / (max_val - min_val)
+        )
+
+    return np.zeros_like(anomaly_map)
+
+
 # ============================================================
 # MAIN EXPERIMENT
 # ============================================================
@@ -2775,6 +2769,10 @@ def run_experiment() -> None:
         "cnn_autoencoder2_nofc_mse_l1_pp"
     )
 
+    heatmap_dir = os.path.join(out_dir, "anomaly_maps")
+
+    os.makedirs(heatmap_dir, exist_ok=True)
+
     os.makedirs(
         out_dir,
         exist_ok=True
@@ -2792,11 +2790,13 @@ def run_experiment() -> None:
 
     train_ds = get_dataset(
         "brats",
+        img_size=IMAGE_SIZE,
         mode="train"
     )
 
     test_ds = get_dataset(
         "brats",
+        img_size=IMAGE_SIZE,
         mode="test"
     )
 
@@ -3203,6 +3203,7 @@ def run_experiment() -> None:
         X_test
     )
 
+
     inference_time = (
         time.time() - t0
     )
@@ -3239,6 +3240,157 @@ def run_experiment() -> None:
     )
 
     # ========================================================
+    # SAVE ANOMALY MAPS FOR COMPARATIVE VISUALIZATION
+    # ========================================================
+    
+    for index in VISUALIZATION_INDICES:
+    
+        index = int(index)
+    
+        original = X_test[index, 0]
+        anomaly_map = test_maps[index, 0]
+        mask = test_masks[index]
+    
+        np.save(
+            os.path.join(
+                heatmap_dir,
+                f"anomaly_map_{index:05d}.npy"
+            ),
+            anomaly_map
+        )
+    
+        # ---------------------------------------------------------
+        # Normalize ONLY for visualization
+        # ---------------------------------------------------------
+        anomaly_map_vis = normalize_for_visualization(anomaly_map)
+        
+        # ---------------------------------------------------------
+        # Binary prediction using RAW anomaly map
+        # ---------------------------------------------------------
+        prediction = post_process_anomaly_mask(
+            anomaly_map,
+            pixel_threshold,
+            min_size=POST_PROCESS_MIN_SIZE
+        )
+        
+        # ---------------------------------------------------------
+        # Figure
+        # ---------------------------------------------------------
+        fig, axes = plt.subplots(
+            1,
+            5,
+            figsize=(18, 4)
+        )
+        
+        # 1. Original
+        axes[0].imshow(
+            original,
+            cmap="gray",
+            vmin=0,
+            vmax=1
+        )
+        axes[0].set_title("Original")
+        
+        # 2. Ground Truth
+        axes[1].imshow(
+            original,
+            cmap="gray",
+            vmin=0,
+            vmax=1
+        )
+        axes[1].imshow(
+            mask,
+            cmap="Reds",
+            alpha=0.75,
+            vmin=0,
+            vmax=1
+        )
+        axes[1].set_title("Ground Truth")
+        
+        # 3. Anomaly Map
+        im = axes[2].imshow(
+            anomaly_map_vis,
+            cmap="inferno",
+            vmin=0,
+            vmax=1
+        )
+        axes[2].set_title("PatchCore Anomaly Map")
+        
+        fig.colorbar(
+            im,
+            ax=axes[2],
+            fraction=0.046,
+            pad=0.04
+        )
+        
+        # 4. Prediction
+        axes[3].imshow(
+            original,
+            cmap="gray",
+            vmin=0,
+            vmax=1
+        )
+        axes[3].imshow(
+            prediction,
+            cmap="Reds",
+            alpha=0.75,
+            vmin=0,
+            vmax=1
+        )
+        axes[3].set_title("Prediction")
+        
+        # 5. Anomaly + GT
+        axes[4].imshow(
+            original,
+            cmap="gray",
+            vmin=0,
+            vmax=1
+        )
+        axes[4].imshow(
+            anomaly_map_vis,
+            cmap="inferno",
+            alpha=0.50,
+            vmin=0,
+            vmax=1
+        )
+        
+        axes[4].contour(
+            mask,
+            levels=[0.5],
+            colors="cyan",
+            linewidths=1
+        )
+        
+        axes[4].set_title("Anomaly + GT")
+        for ax in axes:
+            ax.axis("off")
+    
+        fig.suptitle(
+            f"CNN-AE Localization | "
+            f"index={index} | "
+            f"label={int(y_test[index])}"
+        )
+    
+        plt.tight_layout()
+    
+        path = os.path.join(
+            heatmap_dir,
+            f"localization_{index:05d}.png"
+        )
+    
+        plt.savefig(
+            path,
+            dpi=300,
+            bbox_inches="tight"
+        )
+    
+        plt.close()
+    
+        print(
+            f"  ✓ Saved: {path}"
+        )
+
+    # ========================================================
     # IMAGE-LEVEL EVALUATION
     # ========================================================
 
@@ -3257,7 +3409,7 @@ def run_experiment() -> None:
         y_test == 1
     )[0]
 
-    tumor_anomaly_maps = test_maps[
+    '''tumor_anomaly_maps = test_maps[
         tumor_indices,
         0
     ]
@@ -3265,10 +3417,6 @@ def run_experiment() -> None:
     tumor_masks = test_masks[
         tumor_indices
     ]
-
-    # ========================================================
-    # FINAL SHAPE CHECK
-    # ========================================================
 
     print(
         f"  ✓ Tumor anomaly maps: "
@@ -3294,6 +3442,25 @@ def run_experiment() -> None:
     pixel_metrics = evaluate_pixel_level(
         anomaly_maps=tumor_anomaly_maps,
         masks=tumor_masks,
+        threshold=pixel_threshold
+    )'''
+
+
+    all_anomaly_maps = test_maps[:, 0]   # tutte le slice, non solo tumor
+    all_masks = test_masks               # già include zero-mask per le normal
+
+    print(f"  ✓ Anomaly maps (full test set): {all_anomaly_maps.shape}")
+    print(f"  ✓ Masks (full test set):        {all_masks.shape}")
+
+    if all_anomaly_maps.shape != all_masks.shape:
+        raise ValueError(
+            "Anomaly maps e annotation non compatibili: "
+            f"{all_anomaly_maps.shape} vs {all_masks.shape}"
+        )
+
+    pixel_metrics = evaluate_pixel_level(
+        anomaly_maps=all_anomaly_maps,
+        masks=all_masks,
         threshold=pixel_threshold
     )
 
@@ -3439,7 +3606,7 @@ def run_experiment() -> None:
         out_dir
     )
 
-    plot_reconstruction_examples(
+    '''plot_reconstruction_examples(
         X_test=X_test,
         reconstructions=test_recon,
         anomaly_maps=test_maps,
@@ -3448,7 +3615,7 @@ def run_experiment() -> None:
         test_masks=test_masks,
         out_dir=out_dir,
         n_examples=5
-    )
+    )'''
 
     # ========================================================
     # SAVE RESULTS

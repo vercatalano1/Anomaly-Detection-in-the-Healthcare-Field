@@ -39,7 +39,7 @@ Test tumor: 1948
 
 TRAINING
 ----------------------------------------------------------------------
-Training time: 820.67s
+Training time: 762.56s
 Epochs completed: 80
 Best validation loss: 0.00607853
 
@@ -55,12 +55,12 @@ Image threshold:       0.002057
 
 PIXEL-LEVEL RESULTS
 ----------------------------------------------------------------------
-Pixel AUROC:           0.9038
-Pixel Average Precision: 0.3092
-Dice:                  0.3768
-IoU:                   0.2321
+Pixel AUROC:           0.9086
+Pixel Average Precision: 0.2596
+Dice:                  0.3753
+IoU:                   0.2310
 Pixel Sensitivity:     0.2524
-Pixel Specificity:     0.9959
+Pixel Specificity:     0.9970
 Pixel threshold:       0.124167
 
 LEAKAGE CONTROL
