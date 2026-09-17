@@ -39,7 +39,7 @@ Test tumor: 1948
 
 TRAINING
 ----------------------------------------------------------------------
-Training time: 762.56s
+Training time: 791.14s
 Epochs completed: 80
 Best validation loss: 0.00607853
 

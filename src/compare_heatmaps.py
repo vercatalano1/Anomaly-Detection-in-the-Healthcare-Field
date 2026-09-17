@@ -59,11 +59,8 @@ test_ds = get_dataset(
 def normalize_map(anomaly_map):
     """
     Normalize each anomaly map independently to [0, 1].
-
     This normalization is used ONLY for visualization.
-    Raw anomaly maps are preserved for metrics and analysis.
     """
-
     anomaly_map = np.asarray(
         anomaly_map,
         dtype=np.float32
@@ -75,255 +72,133 @@ def normalize_map(anomaly_map):
     if max_val - min_val < 1e-8:
         return np.zeros_like(anomaly_map)
 
-    return (
-        (anomaly_map - min_val)
-        / (max_val - min_val)
-    )
+    return (anomaly_map - min_val) / (max_val - min_val)
 
 
 # ============================================================
-# PLOT COMPARISON
+# PLOT COMPARISON (HORIZONTAL GRID)
 # ============================================================
 
-def plot_comparison(index):
+def plot_all_comparisons():
+    n_cols = len(VISUALIZATION_INDICES)  # 5 immagini
+    n_rows = 4  # 4 tipologie (Original, GT, CNN, PatchCore)
 
-    index = int(index)
-
-    # --------------------------------------------------------
-    # Dataset sample
-    # --------------------------------------------------------
-
-    sample = test_ds[index]
-
-    image = sample["img"]
-
-    if torch.is_tensor(image):
-        image = (
-            image
-            .squeeze()
-            .cpu()
-            .numpy()
-        )
-
-    mask = sample["mask"]
-
-    if torch.is_tensor(mask):
-        mask = (
-            mask
-            .squeeze()
-            .cpu()
-            .numpy()
-        )
-
-    mask = (
-        mask > 0
-    ).astype(np.float32)
-
-    # --------------------------------------------------------
-    # Load RAW anomaly maps
-    # --------------------------------------------------------
-
-    cnn_path = os.path.join(
-        CNN_AE_DIR,
-        f"anomaly_map_{index:05d}.npy"
-    )
-
-    patchcore_path = os.path.join(
-        PATCHCORE_DIR,
-        f"anomaly_map_{index:05d}.npy"
-    )
-
-    if not os.path.exists(cnn_path):
-        raise FileNotFoundError(
-            f"CNN-AE anomaly map non trovata:\n{cnn_path}"
-        )
-
-    if not os.path.exists(patchcore_path):
-        raise FileNotFoundError(
-            f"PatchCore anomaly map non trovata:\n{patchcore_path}"
-        )
-
-    cnn_map = np.load(cnn_path)
-    patchcore_map = np.load(patchcore_path)
-
-    # --------------------------------------------------------
-    # Normalize ONLY for visualization
-    # --------------------------------------------------------
-
-    cnn_map_vis = normalize_map(
-        cnn_map
-    )
-
-    patchcore_map_vis = normalize_map(
-        patchcore_map
-    )
-
-    # --------------------------------------------------------
-    # Figure
-    # --------------------------------------------------------
-
+    # Creiamo una figura orientata orizzontalmente
     fig, axes = plt.subplots(
-        1,
-        4,
-        figsize=(14, 3.8)
+        n_rows,
+        n_cols,
+        figsize=(16, 12)
     )
 
-    # ========================================================
-    # 1. ORIGINAL
-    # ========================================================
+    row_labels = ["Original", "Ground Truth", "CNN-AE", "PatchCore"]
 
-    axes[0].imshow(
-        image,
-        cmap="gray",
-        vmin=0,
-        vmax=1
-    )
+    for col_idx, index in enumerate(VISUALIZATION_INDICES):
+        index = int(index)
 
-    axes[0].set_title(
-        "Original"
-    )
+        # --------------------------------------------------------
+        # Dataset sample
+        # --------------------------------------------------------
+        sample = test_ds[index]
+        image = sample["img"]
 
-    # ========================================================
-    # 2. GROUND TRUTH
-    # ========================================================
+        if torch.is_tensor(image):
+            image = image.squeeze().cpu().numpy()
 
-    axes[1].imshow(
-        image,
-        cmap="gray",
-        vmin=0,
-        vmax=1
-    )
+        mask = sample["mask"]
+        if torch.is_tensor(mask):
+            mask = mask.squeeze().cpu().numpy()
 
-    axes[1].imshow(
-        mask,
-        cmap="Reds",
-        alpha=0.75,
-        vmin=0,
-        vmax=1
-    )
+        mask = (mask > 0).astype(np.float32)
 
-    axes[1].contour(
-        mask,
-        levels=[0.5],
-        colors="cyan",
-        linewidths=1
-    )
+        # --------------------------------------------------------
+        # Load RAW anomaly maps
+        # --------------------------------------------------------
+        cnn_path = os.path.join(CNN_AE_DIR, f"anomaly_map_{index:05d}.npy")
+        patchcore_path = os.path.join(PATCHCORE_DIR, f"anomaly_map_{index:05d}.npy")
 
-    axes[1].set_title(
-        "Ground Truth"
-    )
+        if not os.path.exists(cnn_path):
+            raise FileNotFoundError(f"CNN-AE anomaly map non trovata:\n{cnn_path}")
+        if not os.path.exists(patchcore_path):
+            raise FileNotFoundError(f"PatchCore anomaly map non trovata:\n{patchcore_path}")
 
-    # ========================================================
-    # 3. CNN-AE
-    # ========================================================
+        cnn_map = np.load(cnn_path)
+        patchcore_map = np.load(patchcore_path)
 
-    axes[2].imshow(
-        image,
-        cmap="gray",
-        vmin=0,
-        vmax=1
-    )
+        # --------------------------------------------------------
+        # Normalize ONLY for visualization
+        # --------------------------------------------------------
+        cnn_map_vis = normalize_map(cnn_map)
+        patchcore_map_vis = normalize_map(patchcore_map)
 
-    axes[2].imshow(
-        cnn_map_vis,
-        cmap="inferno",
-        alpha=0.55,
-        vmin=0,
-        vmax=1
-    )
+        # --------------------------------------------------------
+        # Assegnazione degli assi verticali per questa colonna
+        # --------------------------------------------------------
+        ax_orig = axes[0, col_idx]
+        ax_gt = axes[1, col_idx]
+        ax_cnn = axes[2, col_idx]
+        ax_patch = axes[3, col_idx]
 
-    axes[2].contour(
-        mask,
-        levels=[0.5],
-        colors="cyan",
-        linewidths=1
-    )
+        # 1. ORIGINAL
+        ax_orig.imshow(image, cmap="gray", vmin=0, vmax=1)
+        # Titolo in cima a ogni colonna
+        ax_orig.set_title(f"ID: {index}", fontsize=14, pad=10, fontweight="bold")
 
-    axes[2].set_title(
-        "CNN-AE"
-    )
+        # 2. GROUND TRUTH
+        ax_gt.imshow(image, cmap="gray", vmin=0, vmax=1)
+        ax_gt.imshow(mask, cmap="Reds", alpha=0.75, vmin=0, vmax=1)
+        ax_gt.contour(mask, levels=[0.5], colors="cyan", linewidths=1)
 
-    # ========================================================
-    # 4. PATCHCORE
-    # ========================================================
+        # 3. CNN-AE
+        ax_cnn.imshow(image, cmap="gray", vmin=0, vmax=1)
+        ax_cnn.imshow(cnn_map_vis, cmap="inferno", alpha=0.55, vmin=0, vmax=1)
+        ax_cnn.contour(mask, levels=[0.5], colors="cyan", linewidths=1)
 
-    axes[3].imshow(
-        image,
-        cmap="gray",
-        vmin=0,
-        vmax=1
-    )
-
-    axes[3].imshow(
-        patchcore_map_vis,
-        cmap="inferno",
-        alpha=0.55,
-        vmin=0,
-        vmax=1
-    )
-
-    axes[3].contour(
-        mask,
-        levels=[0.5],
-        colors="cyan",
-        linewidths=1
-    )
-
-    axes[3].set_title(
-        "PatchCore"
-    )
+        # 4. PATCHCORE
+        ax_patch.imshow(image, cmap="gray", vmin=0, vmax=1)
+        ax_patch.imshow(patchcore_map_vis, cmap="inferno", alpha=0.55, vmin=0, vmax=1)
+        ax_patch.contour(mask, levels=[0.5], colors="cyan", linewidths=1)
 
     # --------------------------------------------------------
-    # Formatting
+    # Formatting assi e label laterali
     # --------------------------------------------------------
+    for r in range(n_rows):
+        for c in range(n_cols):
+            axes[r, c].set_xticks([])
+            axes[r, c].set_yticks([])
+            
+            # Etichette delle righe (solo sulla prima colonna a sinistra)
+            if c == 0:
+                axes[r, c].set_ylabel(row_labels[r], fontsize=14, labelpad=15, fontweight="bold")
 
-    for ax in axes:
-        ax.axis("off")
-
-    fig.suptitle(
-        f"Localization comparison | "
-        f"index={index} | "
-        f"patient={sample['patient_id']}",
-        fontsize=12
-    )
-
-    plt.tight_layout()
-
+    # Spaziatura generale
+    fig.suptitle("Pixel-Level Localization Comparison", fontsize=18, fontweight="bold", y=0.98)
+    
+    # Riduce lo spazio vuoto tra le immagini rendendo la griglia compatta
+    plt.subplots_adjust(wspace=0.05, hspace=0.05)
+    
     # --------------------------------------------------------
     # Save
     # --------------------------------------------------------
-
-    output_path = os.path.join(
-        OUT_DIR,
-        f"comparison_{index:05d}.png"
-    )
-
+    output_path = os.path.join(OUT_DIR, "comparison_all_models_horizontal.png")
+    
     plt.savefig(
         output_path,
         dpi=300,
         bbox_inches="tight"
     )
 
+    print(f"  ✓ Saved combined horizontal grid: {output_path}")
+
     plt.show()
     plt.close()
-
-    print(
-        f"  ✓ Saved: {output_path}"
-    )
 
 
 # ============================================================
 # RUN
 # ============================================================
+if __name__ == "__main__":
+    print("\nGenerating comprehensive comparative horizontal heatmap grid...\n")
+    plot_all_comparisons()
+    print("\nDone.")
 
-print(
-    "\nGenerating comparative heatmaps...\n"
-)
 
-for index in VISUALIZATION_INDICES:
-
-    plot_comparison(index)
-
-print(
-    "\nDone."
-)

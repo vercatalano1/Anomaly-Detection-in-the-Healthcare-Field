@@ -620,12 +620,6 @@ def plot_results(
         alpha=0.5
     )
 
-    ax.fill_between(
-        metrics["fpr"],
-        metrics["tpr"],
-        alpha=0.2
-    )
-
     ax.set_xlabel(
         "False Positive Rate"
     )
@@ -675,12 +669,6 @@ def plot_results(
             f"Baseline = "
             f"{baseline:.3f}"
         )
-    )
-
-    ax.fill_between(
-        metrics["recall"],
-        metrics["precision"],
-        alpha=0.2
     )
 
     ax.set_xlabel(

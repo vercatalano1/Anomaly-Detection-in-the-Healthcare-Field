@@ -17,7 +17,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.metrics import roc_auc_score, average_precision_score, roc_curve
 
 # ============================================================
@@ -37,12 +36,10 @@ RESULTS_DIR = PROJECT_ROOT / "results"
 OUT_DIR = os.path.join(RESULTS_DIR, "summary", "patient_level")
 os.makedirs(OUT_DIR, exist_ok=True)
 
-sns.set_theme(style="whitegrid", font_scale=1.1)
-plt.rcParams["figure.facecolor"] = "white"
-
+plt.rcParams.update({'font.size': 11})
 
 # ============================================================
-# SORGENTI DEI MODELLI PRINCIPALI (Migliore variante per architettura)
+# SORGENTI E PALETTE UNIFICATA
 # ============================================================
 
 COMPATIBLE_SOURCES = [
@@ -52,8 +49,10 @@ COMPATIBLE_SOURCES = [
 ]
 
 ORDER_MODELS = ["Isolation Forest", "CNN Autoencoder", "PatchCore"]
+
+# Palette ufficiale coerente con tutta la tesi
 MODEL_COLORS = {
-    "Isolation Forest": "#f90808",
+    "Isolation Forest": "#d62728",
     "CNN Autoencoder": "#2ca02c",
     "PatchCore": "#1f77b4"
 }
@@ -77,11 +76,66 @@ def compute_patient_level(df: pd.DataFrame) -> pd.DataFrame:
 
 def evaluate(df: pd.DataFrame) -> dict:
     return {
-        "auroc": roc_auc_score(df["true_label"] if "true_label" in df.columns else df["patient_label"],
-                                df["anomaly_score"] if "anomaly_score" in df.columns else df["patient_score"]),
-        "ap": average_precision_score(df["true_label"] if "true_label" in df.columns else df["patient_label"],
-                                      df["anomaly_score"] if "anomaly_score" in df.columns else df["patient_score"]),
+        "auroc": roc_auc_score(df["true_label"],
+                                df["anomaly_score"] 
+        ),
+        "ap": average_precision_score(df["true_label"] ,
+                                      df["anomaly_score"]
+        ),
     }
+
+
+def plot_comparison_bar(df, metric_slice, metric_patient, title, filename, ylabel="Score"):
+    """
+    Funzione per generare barplot raggruppati accademici.
+    Slice-level = Trasparente/Chiaro, Patient-level = Colore Pieno/Scuro
+    """
+    models = [m for m in ORDER_MODELS if m in df["model"].values]
+    
+    x = np.arange(len(models))
+    width = 0.35
+    
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    
+    slice_vals = [df[df["model"]==m][metric_slice].values[0] for m in models]
+    patient_vals = [df[df["model"]==m][metric_patient].values[0] for m in models]
+    colors = [MODEL_COLORS[m] for m in models]
+    
+    # Barre Slice-level (più chiare)
+    rects1 = ax.bar(x - width/2, slice_vals, width, label='Slice-level', 
+                    color=colors, alpha=0.4, edgecolor=colors, linewidth=2)
+    
+    # Barre Patient-level (colore pieno)
+    rects2 = ax.bar(x + width/2, patient_vals, width, label='Patient-level', 
+                    color=colors, edgecolor='white', linewidth=1)
+    
+    # Etichette valori
+    for rect in rects1 + rects2:
+        height = rect.get_height()
+        ax.text(rect.get_x() + rect.get_width()/2., height + 0.01,
+                f'{height:.3f}', ha='center', va='bottom', fontsize=9, color='#333333')
+
+    ax.set_ylabel(ylabel, fontweight='bold')
+    ax.set_title(title, fontweight="bold", pad=15, fontsize=14)
+    ax.set_xticks(x)
+    ax.set_xticklabels(models, fontweight='bold')
+    ax.set_ylim(0, 1.20)
+    
+    # Legenda personalizzata neutrale
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='#333333', alpha=0.4, edgecolor='#333333', linewidth=2, label='Slice-level (Singola Immagine)'),
+        Patch(facecolor='#333333', edgecolor='white', linewidth=1, label='Patient-level (Max Pooling)')
+    ]
+    ax.legend(handles=legend_elements, loc='upper left', frameon=False)
+    
+    ax.grid(axis="y", linestyle="--", alpha=0.6, zorder=0)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUT_DIR, filename), dpi=300, bbox_inches="tight")
+    plt.close()
 
 
 def run() -> Optional[pd.DataFrame]:
@@ -90,7 +144,7 @@ def run() -> Optional[pd.DataFrame]:
     print("=" * 70)
 
     rows = []
-    patient_data_dict = {}  # Per memorizzare i dataframe a livello di paziente per i plot avanzati
+    patient_data_dict = {}
 
     for model_name, relative_path in COMPATIBLE_SOURCES:
         csv_path = os.path.join(RESULTS_DIR, relative_path)
@@ -143,85 +197,30 @@ def run() -> Optional[pd.DataFrame]:
     print(f"\n✓ Salvato CSV: {out_csv}")
 
     # ============================================================
-    # PLOT 1: Slice-level vs Patient-level AUROC (Barplot)
+    # PLOTS 1 & 2: Slice-level vs Patient-level (AUROC & AP)
     # ============================================================
-    melted = result_df.melt(
-        id_vars="model", value_vars=["slice_auroc", "patient_auroc"],
-        var_name="Livello", value_name="AUROC"
+    
+    plot_comparison_bar(
+        result_df, 
+        "slice_auroc", "patient_auroc", 
+        "AUROC: Confronto Slice-Level vs Patient-Level", 
+        "patient_vs_slice_auroc.png"
     )
+    print(f"✓ Salvato Grafico: patient_vs_slice_auroc.png")
 
-    melted["Livello"] = melted["Livello"].map({
-        "slice_auroc": "Slice-level",
-        "patient_auroc": "Patient-level",
-    })
-
-    plt.figure(figsize=(10, 6))
-    ax = sns.barplot(
-        data=melted, x="model", y="AUROC", hue="Livello", 
-        order=[m for m in ORDER_MODELS if m in melted["model"].values],
-        palette="Purples_d"
+    plot_comparison_bar(
+        result_df, 
+        "slice_ap", "patient_ap", 
+        "Average Precision: Confronto Slice-Level vs Patient-Level", 
+        "patient_vs_slice_ap.png",
+        ylabel="AP Score"
     )
-
-    for p in ax.patches:
-        height = p.get_height()
-        if height and not np.isnan(height) and height > 0:
-            ax.annotate(f"{height:.3f}", (p.get_x() + p.get_width() / 2., height),
-                        ha="center", va="bottom", fontsize=9, fontweight="bold",
-                        xytext=(0, 4), textcoords="offset points")
-
-    plt.ylim(0, 1.1)
-    plt.title("AUROC Comparison: Slice-Level vs Patient-Level", fontweight="bold", pad=15)
-    plt.xlabel("")
-    plt.legend(loc="upper left")
-    plt.tight_layout()
-
-    fig_path_1 = os.path.join(OUT_DIR, "patient_vs_slice_auroc.png")
-    plt.savefig(fig_path_1, dpi=300, bbox_inches="tight")
-    plt.close()
-    print(f"✓ Salvato Grafico: {fig_path_1}")
-
-    # ============================================================
-    # PLOT 2: Slice-level vs Patient-level Average Precision (Barplot)
-    # ============================================================
-    melted_ap = result_df.melt(
-        id_vars="model", value_vars=["slice_ap", "patient_ap"],
-        var_name="Livello", value_name="AP"
-    )
-
-    melted_ap["Livello"] = melted_ap["Livello"].map({
-        "slice_ap": "Slice-level",
-        "patient_ap": "Patient-level",
-    })
-
-    plt.figure(figsize=(10, 6))
-    ax = sns.barplot(
-        data=melted_ap, x="model", y="AP", hue="Livello", 
-        order=[m for m in ORDER_MODELS if m in melted_ap["model"].values],
-        palette="Blues_d"
-    )
-
-    for p in ax.patches:
-        height = p.get_height()
-        if height and not np.isnan(height) and height > 0:
-            ax.annotate(f"{height:.3f}", (p.get_x() + p.get_width() / 2., height),
-                        ha="center", va="bottom", fontsize=9, fontweight="bold",
-                        xytext=(0, 4), textcoords="offset points")
-
-    plt.ylim(0, 1.1)
-    plt.title("Average Precision Comparison: Slice-Level vs Patient-Level", fontweight="bold", pad=15)
-    plt.xlabel("")
-    plt.legend(loc="upper left")
-    plt.tight_layout()
-
-    fig_path_2 = os.path.join(OUT_DIR, "patient_vs_slice_ap.png")
-    plt.savefig(fig_path_2, dpi=300, bbox_inches="tight")
-    plt.close()
-    print(f"✓ Salvato Grafico: {fig_path_2}")
+    print(f"✓ Salvato Grafico: patient_vs_slice_ap.png")
 
     # ============================================================
     # PLOT 3: Patient-Level ROC Curves (Multi-model)
     # ============================================================
-    plt.figure(figsize=(8, 7))
+    plt.figure(figsize=(7, 7))
 
     for model_name in ORDER_MODELS:
         if model_name in patient_data_dict:
@@ -231,24 +230,28 @@ def run() -> Optional[pd.DataFrame]:
             plt.plot(fpr, tpr, label=f"{model_name} (AUC = {auc_val:.3f})", 
                      color=MODEL_COLORS.get(model_name, None), linewidth=2.5)
 
-    plt.plot([0, 1], [0, 1], "--", color="gray", linewidth=1.5, alpha=0.7)
+    plt.plot([0, 1], [0, 1], "--", color="#333333", linewidth=1.5, alpha=0.6)
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title("Patient-Level ROC Curves", fontweight="bold", pad=15)
-    plt.legend(loc="lower right")
-    plt.grid(True, alpha=0.3)
+    plt.xlabel("False Positive Rate", fontweight='bold')
+    plt.ylabel("True Positive Rate", fontweight='bold')
+    plt.title("Patient-Level ROC Curves", fontweight="bold", pad=15, fontsize=14)
+    plt.legend(loc="lower right", frameon=True)
+    plt.grid(True, linestyle="--", alpha=0.6)
+    
+    ax = plt.gca()
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
     plt.tight_layout()
 
     fig_path_3 = os.path.join(OUT_DIR, "patient_level_roc_curves.png")
     plt.savefig(fig_path_3, dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"✓ Salvato Grafico: {fig_path_3}")
+    print(f"✓ Salvato Grafico: patient_level_roc_curves.png")
 
     print(f"\nTutti i risultati e i grafici patient-level sono completi in '{OUT_DIR}'!")
     return result_df
-
 
 if __name__ == "__main__":
     run()

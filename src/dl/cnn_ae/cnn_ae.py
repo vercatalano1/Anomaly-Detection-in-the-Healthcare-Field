@@ -1,5 +1,5 @@
 # ============================================================
-# CNN AUTOENCODER — Denoising con la loss migliore MSE+L1
+# CNN AUTOENCODER — pp + Denoising con la loss migliore MSE+L1
 # ============================================================
 
 import os
@@ -7,6 +7,7 @@ import re
 import sys
 import time
 import random
+from scipy import ndimage
 from typing import Dict, Tuple, List
 
 import numpy as np
@@ -57,7 +58,7 @@ LEARNING_RATE = 1e-3
 
 WEIGHT_DECAY = 1e-5
 
-LATENT_DIM = 256
+LATENT_DIM = 128
 
 # ------------------------------------------------------------
 # DENOISING
@@ -80,6 +81,14 @@ PATIENCE = 10
 MIN_DELTA = 1e-5
 
 NUM_WORKERS = 0
+
+IMAGE_SIZE = 64
+IMAGE_THRESHOLD_PERCENTILE = 95
+PIXEL_THRESHOLD_PERCENTILE = 99
+POST_PROCESS_MIN_SIZE = 20
+
+# Stessi indici usati per PatchCore
+VISUALIZATION_INDICES = [828, 1314, 1801, 2288, 2775]
 
 #OUT_DIR = "results/cnn_autoencoder2"
 
@@ -286,7 +295,7 @@ def create_train_validation_split(
 # CNN AUTOENCODER
 # ============================================================
 
-'''class Encoder(
+class Encoder(
     nn.Module
 ):
 
@@ -531,256 +540,8 @@ class ConvAutoencoder(
             z
         )
 
-        return reconstruction, z'''
-
-
-
-class Encoder(nn.Module):
-
-    def __init__(
-        self,
-        latent_dim: int = 256
-    ):
-
-        super().__init__()
-
-        self.features = nn.Sequential(
-
-            # 64 x 64 -> 32 x 32
-            nn.Conv2d(
-                1,
-                32,
-                kernel_size=3,
-                stride=2,
-                padding=1,
-                bias=False
-            ),
-
-            nn.GroupNorm(
-                8,
-                32
-            ),
-
-            nn.LeakyReLU(
-                0.2,
-                inplace=True
-            ),
-
-            # 32 x 32 -> 16 x 16
-            nn.Conv2d(
-                32,
-                64,
-                kernel_size=3,
-                stride=2,
-                padding=1,
-                bias=False
-            ),
-
-            nn.GroupNorm(
-                8,
-                64
-            ),
-
-            nn.LeakyReLU(
-                0.2,
-                inplace=True
-            ),
-
-            # 16 x 16 -> 8 x 8
-            nn.Conv2d(
-                64,
-                128,
-                kernel_size=3,
-                stride=2,
-                padding=1,
-                bias=False
-            ),
-
-            nn.GroupNorm(
-                16,
-                128
-            ),
-
-            nn.LeakyReLU(
-                0.2,
-                inplace=True
-            ),
-
-            # 8 x 8 -> 4 x 4
-            nn.Conv2d(
-                128,
-                256,
-                kernel_size=3,
-                stride=2,
-                padding=1,
-                bias=False
-            ),
-
-            nn.GroupNorm(
-                16,
-                256
-            ),
-
-            nn.LeakyReLU(
-                0.2,
-                inplace=True
-            )
-        )
-
-        '''self.fc = nn.Linear(
-            256 * 4 * 4,
-            latent_dim
-        )'''
-
-    def forward(
-        self,
-        x
-    ):
-
-        z = self.features(x)
-
-        '''x = x.flatten(
-            start_dim=1
-        )
-
-        z = self.fc(x) '''
-
-        return z
-
-
-class Decoder(nn.Module):
-
-    def __init__(
-        self,
-        latent_dim: int = 256
-    ):
-
-        super().__init__()
-
-        '''self.fc = nn.Linear(
-            latent_dim,
-            256 * 4 * 4
-        )'''
-
-        self.features = nn.Sequential(
-
-            # 4 x 4 -> 8 x 8
-            nn.ConvTranspose2d(
-                256,
-                128,
-                kernel_size=4,
-                stride=2,
-                padding=1,
-                bias=False
-            ),
-
-            nn.GroupNorm(
-                16,
-                128
-            ),
-
-            nn.LeakyReLU(
-                0.2,
-                inplace=True
-            ),
-
-            # 8 x 8 -> 16 x 16
-            nn.ConvTranspose2d(
-                128,
-                64,
-                kernel_size=4,
-                stride=2,
-                padding=1,
-                bias=False
-            ),
-
-            nn.GroupNorm(
-                8,
-                64
-            ),
-
-            nn.LeakyReLU(
-                0.2,
-                inplace=True
-            ),
-
-            # 16 x 16 -> 32 x 32
-            nn.ConvTranspose2d(
-                64,
-                32,
-                kernel_size=4,
-                stride=2,
-                padding=1,
-                bias=False
-            ),
-
-            nn.GroupNorm(
-                8,
-                32
-            ),
-
-            nn.LeakyReLU(
-                0.2,
-                inplace=True
-            ),
-
-            # 32 x 32 -> 64 x 64
-            nn.ConvTranspose2d(
-                32,
-                1,
-                kernel_size=4,
-                stride=2,
-                padding=1
-            ),
-            nn.Sigmoid()
-        )
-
-    def forward(
-        self,
-        z
-    ):
-
-        '''x = self.fc(z)
-
-        x = x.view(
-            -1,
-            256,
-            4,
-            4
-        )'''
-
-        x = self.features(z)
-
-        return x
-
-
-class ConvAutoencoder(nn.Module):
-
-    def __init__(
-        self,
-        latent_dim: int = 256
-    ):
-
-        super().__init__()
-
-        self.encoder = Encoder(
-            latent_dim
-        )
-
-        self.decoder = Decoder(
-            latent_dim
-        )
-
-    def forward(
-        self,
-        x
-    ):
-
-        z = self.encoder(x)
-
-        reconstruction = self.decoder(z)
-
         return reconstruction, z
+
 
 
 
@@ -1417,7 +1178,7 @@ def compute_image_threshold(
 
     threshold = np.percentile(
         healthy_scores,
-        95
+        IMAGE_THRESHOLD_PERCENTILE
     )
 
     return float(
@@ -1629,12 +1390,64 @@ def compute_pixel_threshold(
 
     threshold = np.percentile(
         healthy_anomaly_maps,
-        99
+        PIXEL_THRESHOLD_PERCENTILE
     )
 
     return float(
         threshold
     )
+
+
+
+def post_process_anomaly_mask(
+    anomaly_map: np.ndarray,
+    threshold: float,
+    min_size: int = 20
+) -> np.ndarray:
+    """
+    Converte una anomaly map in una mask binaria
+    applicando thresholding e post-processing spaziale.
+
+    Steps:
+        1. Threshold
+        2. Rimozione piccole componenti
+        3. Morphological closing
+    """
+
+    # Threshold
+    binary_mask = (
+        anomaly_map >= threshold
+    )
+
+    # Connected components
+    labeled_mask, num_components = (
+        ndimage.label(binary_mask)
+    )
+
+    # Conta i pixel di ogni componente
+    component_sizes = np.bincount(
+        labeled_mask.ravel()
+    )
+
+    # Mantieni solo componenti sufficientemente grandi
+    keep = component_sizes >= min_size
+    keep[0] = False
+
+    binary_mask = keep[
+        labeled_mask
+    ]
+
+    # Morphological closing
+    binary_mask = ndimage.binary_closing(
+        binary_mask,
+        structure=np.ones((3, 3))
+    )
+
+    return binary_mask.astype(
+        np.uint8
+    )
+
+
 
 
 # ============================================================
@@ -1665,11 +1478,14 @@ def evaluate_pixel_level(
         scores
     )
 
-    binary_prediction = (
-        anomaly_maps >= threshold
-    ).astype(
-        np.uint8
-    )
+    binary_prediction = np.stack([
+        post_process_anomaly_mask(
+            anomaly_map,
+            threshold,
+            min_size=POST_PROCESS_MIN_SIZE
+        )
+        for anomaly_map in anomaly_maps
+    ])
 
     tp = np.sum(
         (
@@ -1879,6 +1695,7 @@ def plot_image_level_results(
         sns.kdeplot(
             healthy,
             fill=True,
+            color="#2ca02c",
             alpha=0.4,
             label="Healthy",
             ax=ax
@@ -1889,6 +1706,7 @@ def plot_image_level_results(
         sns.kdeplot(
             tumor,
             fill=True,
+            color="#d62728",
             alpha=0.4,
             label="Tumor",
             ax=ax
@@ -2167,7 +1985,7 @@ def plot_pixel_level_results(
     )
 
 
-# ============================================================
+'''# ============================================================
 # RECONSTRUCTION / ANOMALY MAP VISUALIZATION
 # ============================================================
 
@@ -2185,9 +2003,8 @@ def plot_reconstruction_examples(
     Salva esempi tumorali con:
 
         original
-        reconstruction
-        anomaly map
         ground truth
+        anomaly map
         overlay
     """
 
@@ -2195,29 +2012,18 @@ def plot_reconstruction_examples(
 
         return
 
-    n = min(
-        n_examples,
-        len(test_tumor_indices)
+    selected = np.asarray(
+        VISUALIZATION_INDICES,
+         dtype=int
     )
 
-    selected = (
-        test_tumor_indices[
-            :n
-        ]
-    )
 
     fig, axes = plt.subplots(
-        n,
+        1,
         5,
-        figsize=(15, 3 * n)
+        figsize=(15, 4)
     )
 
-    if n == 1:
-
-        axes = np.expand_dims(
-            axes,
-            axis=0
-        )
 
     for row, idx in enumerate(
         selected
@@ -2242,15 +2048,6 @@ def plot_reconstruction_examples(
             ]
         )
 
-        # Tumor masks are stored in the same
-        # order as the tumor test subset.
-        '''tumor_position = np.where(
-            test_tumor_indices == idx
-        )[0][0]
-
-        mask = test_masks[
-            tumor_position
-        ]'''
 
         # Ground-truth mask corresponding to this test image
         mask = test_masks[idx]
@@ -2271,18 +2068,26 @@ def plot_reconstruction_examples(
         )
 
         # ----------------------------------------------------
-        # Reconstruction
+        # Ground truth
         # ----------------------------------------------------
-
+        
         axes[row, 1].imshow(
-            reconstruction,
+            original,
             cmap="gray",
             vmin=0,
             vmax=1
         )
-
+        
+        axes[row, 1].imshow(
+            mask,
+            cmap="Reds",
+            alpha=0.8,
+            vmin=0,
+            vmax=1
+        )
+        
         axes[row, 1].set_title(
-            "Reconstruction"
+            "Ground Truth"
         )
 
         # ----------------------------------------------------
@@ -2295,31 +2100,9 @@ def plot_reconstruction_examples(
         )
 
         axes[row, 2].set_title(
-            "Anomaly Map"
+            "CNN-AE Anomaly Map"
         )
 
-        # ----------------------------------------------------
-        # Ground truth
-        # ----------------------------------------------------
-
-        axes[row, 3].imshow(
-            original,
-            cmap="gray",
-            vmin=0,
-            vmax=1
-        )
-
-        axes[row, 3].imshow(
-            mask,
-            cmap="Reds",
-            alpha=0.8,
-            vmin=0,
-            vmax=1
-        )
-
-        axes[row, 3].set_title(
-            "Ground Truth"
-        )
 
         # ----------------------------------------------------
         # Overlay
@@ -2372,7 +2155,7 @@ def plot_reconstruction_examples(
 
     print(
         f"  ✓ Saved: {path}"
-    )
+    )'''
 
 
 # ============================================================
@@ -2587,6 +2370,36 @@ def save_metrics(
         f"  ✓ Saved: {path}"
     )
 
+
+# ============================================================
+# PIXEL-LEVEL ROC CURVE (CNN-AE)
+# ============================================================
+
+def save_pixel_roc_curve(y_true_pixels, y_scores_pixels, out_dir):
+    from sklearn.metrics import roc_curve, roc_auc_score
+    
+    fpr, tpr, _ = roc_curve(y_true_pixels, y_scores_pixels)
+    auc_val = roc_auc_score(y_true_pixels, y_scores_pixels)
+    
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.plot(fpr, tpr, linewidth=2.5, color="#1f77b4", label=f"CNN-AE (Pixel AUROC = {auc_val:.3f})")
+    ax.plot([0, 1], [0, 1], "--", color="#333333", linewidth=1.5, alpha=0.6)
+    
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel("False Positive Rate (Pixel)", fontweight='bold', fontsize=11)
+    ax.set_ylabel("True Positive Rate (Pixel)", fontweight='bold', fontsize=11)
+    ax.set_title("Pixel-Level ROC Curve", fontweight="bold", pad=15, fontsize=13)
+    ax.legend(loc="lower right", frameon=True, fontsize=10)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    plt.tight_layout()
+    path = os.path.join(out_dir, "pixel_level_roc_curve.png")
+    plt.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"  ✓ Saved pixel-level ROC curve: {path}")
 
 # ============================================================
 # REPORT
@@ -2936,6 +2749,27 @@ def save_report(
     )
 
 
+def normalize_for_visualization(anomaly_map):
+    """
+    Normalize anomaly map to [0, 1] for visualization only.
+    """
+    anomaly_map = np.asarray(
+        anomaly_map,
+        dtype=np.float32
+    )
+
+    min_val = anomaly_map.min()
+    max_val = anomaly_map.max()
+
+    if max_val > min_val:
+        return (
+            (anomaly_map - min_val)
+            / (max_val - min_val)
+        )
+
+    return np.zeros_like(anomaly_map)
+
+
 # ============================================================
 # MAIN EXPERIMENT
 # ============================================================
@@ -2964,8 +2798,12 @@ def run_experiment() -> None:
 
     out_dir = os.path.join(
         "results",
-        "cnn_autoencoder2_nofc_mse_l1_denoising_spaziale"
+        "cnn_autoencoder2_nofc_mse_l1_pp"
     )
+
+    heatmap_dir = os.path.join(out_dir, "anomaly_maps")
+
+    os.makedirs(heatmap_dir, exist_ok=True)
 
     os.makedirs(
         out_dir,
@@ -2984,11 +2822,13 @@ def run_experiment() -> None:
 
     train_ds = get_dataset(
         "brats",
+        img_size=IMAGE_SIZE,
         mode="train"
     )
 
     test_ds = get_dataset(
         "brats",
+        img_size=IMAGE_SIZE,
         mode="test"
     )
 
@@ -3395,6 +3235,7 @@ def run_experiment() -> None:
         X_test
     )
 
+
     inference_time = (
         time.time() - t0
     )
@@ -3431,6 +3272,157 @@ def run_experiment() -> None:
     )
 
     # ========================================================
+    # SAVE ANOMALY MAPS FOR COMPARATIVE VISUALIZATION
+    # ========================================================
+    
+    for index in VISUALIZATION_INDICES:
+    
+        index = int(index)
+    
+        original = X_test[index, 0]
+        anomaly_map = test_maps[index, 0]
+        mask = test_masks[index]
+    
+        np.save(
+            os.path.join(
+                heatmap_dir,
+                f"anomaly_map_{index:05d}.npy"
+            ),
+            anomaly_map
+        )
+    
+        # ---------------------------------------------------------
+        # Normalize ONLY for visualization
+        # ---------------------------------------------------------
+        anomaly_map_vis = normalize_for_visualization(anomaly_map)
+        
+        # ---------------------------------------------------------
+        # Binary prediction using RAW anomaly map
+        # ---------------------------------------------------------
+        prediction = post_process_anomaly_mask(
+            anomaly_map,
+            pixel_threshold,
+            min_size=POST_PROCESS_MIN_SIZE
+        )
+        
+        # ---------------------------------------------------------
+        # Figure
+        # ---------------------------------------------------------
+        fig, axes = plt.subplots(
+            1,
+            5,
+            figsize=(18, 4)
+        )
+        
+        # 1. Original
+        axes[0].imshow(
+            original,
+            cmap="gray",
+            vmin=0,
+            vmax=1
+        )
+        axes[0].set_title("Original")
+        
+        # 2. Ground Truth
+        axes[1].imshow(
+            original,
+            cmap="gray",
+            vmin=0,
+            vmax=1
+        )
+        axes[1].imshow(
+            mask,
+            cmap="Reds",
+            alpha=0.75,
+            vmin=0,
+            vmax=1
+        )
+        axes[1].set_title("Ground Truth")
+        
+        # 3. Anomaly Map
+        im = axes[2].imshow(
+            anomaly_map_vis,
+            cmap="inferno",
+            vmin=0,
+            vmax=1
+        )
+        axes[2].set_title("PatchCore Anomaly Map")
+        
+        fig.colorbar(
+            im,
+            ax=axes[2],
+            fraction=0.046,
+            pad=0.04
+        )
+        
+        # 4. Prediction
+        axes[3].imshow(
+            original,
+            cmap="gray",
+            vmin=0,
+            vmax=1
+        )
+        axes[3].imshow(
+            prediction,
+            cmap="Reds",
+            alpha=0.75,
+            vmin=0,
+            vmax=1
+        )
+        axes[3].set_title("Prediction")
+        
+        # 5. Anomaly + GT
+        axes[4].imshow(
+            original,
+            cmap="gray",
+            vmin=0,
+            vmax=1
+        )
+        axes[4].imshow(
+            anomaly_map_vis,
+            cmap="inferno",
+            alpha=0.50,
+            vmin=0,
+            vmax=1
+        )
+        
+        axes[4].contour(
+            mask,
+            levels=[0.5],
+            colors="cyan",
+            linewidths=1
+        )
+        
+        axes[4].set_title("Anomaly + GT")
+        for ax in axes:
+            ax.axis("off")
+    
+        fig.suptitle(
+            f"CNN-AE Localization | "
+            f"index={index} | "
+            f"label={int(y_test[index])}"
+        )
+    
+        plt.tight_layout()
+    
+        path = os.path.join(
+            heatmap_dir,
+            f"localization_{index:05d}.png"
+        )
+    
+        plt.savefig(
+            path,
+            dpi=300,
+            bbox_inches="tight"
+        )
+    
+        plt.close()
+    
+        print(
+            f"  ✓ Saved: {path}"
+        )
+
+    # ========================================================
     # IMAGE-LEVEL EVALUATION
     # ========================================================
 
@@ -3449,7 +3441,7 @@ def run_experiment() -> None:
         y_test == 1
     )[0]
 
-    tumor_anomaly_maps = test_maps[
+    '''tumor_anomaly_maps = test_maps[
         tumor_indices,
         0
     ]
@@ -3457,10 +3449,6 @@ def run_experiment() -> None:
     tumor_masks = test_masks[
         tumor_indices
     ]
-
-    # ========================================================
-    # FINAL SHAPE CHECK
-    # ========================================================
 
     print(
         f"  ✓ Tumor anomaly maps: "
@@ -3486,6 +3474,25 @@ def run_experiment() -> None:
     pixel_metrics = evaluate_pixel_level(
         anomaly_maps=tumor_anomaly_maps,
         masks=tumor_masks,
+        threshold=pixel_threshold
+    )'''
+
+
+    all_anomaly_maps = test_maps[:, 0]   # tutte le slice, non solo tumor
+    all_masks = test_masks               # già include zero-mask per le normal
+
+    print(f"  ✓ Anomaly maps (full test set): {all_anomaly_maps.shape}")
+    print(f"  ✓ Masks (full test set):        {all_masks.shape}")
+
+    if all_anomaly_maps.shape != all_masks.shape:
+        raise ValueError(
+            "Anomaly maps e annotation non compatibili: "
+            f"{all_anomaly_maps.shape} vs {all_masks.shape}"
+        )
+
+    pixel_metrics = evaluate_pixel_level(
+        anomaly_maps=all_anomaly_maps,
+        masks=all_masks,
         threshold=pixel_threshold
     )
 
@@ -3631,7 +3638,7 @@ def run_experiment() -> None:
         out_dir
     )
 
-    plot_reconstruction_examples(
+    '''plot_reconstruction_examples(
         X_test=X_test,
         reconstructions=test_recon,
         anomaly_maps=test_maps,
@@ -3640,7 +3647,7 @@ def run_experiment() -> None:
         test_masks=test_masks,
         out_dir=out_dir,
         n_examples=5
-    )
+    )'''
 
     # ========================================================
     # SAVE RESULTS
@@ -3670,6 +3677,13 @@ def run_experiment() -> None:
         image_metrics=image_metrics,
         pixel_metrics=pixel_metrics,
         history=history,
+        out_dir=out_dir
+    )
+
+    # Genera la curva ROC a livello di pixel
+    save_pixel_roc_curve(
+        y_true_pixels=all_masks.reshape(-1),
+        y_scores_pixels=all_anomaly_maps.reshape(-1),
         out_dir=out_dir
     )
 
@@ -3748,6 +3762,10 @@ def run_experiment() -> None:
 
     print(
         "  • pixel_level_results.png"
+    )
+
+    print(
+        "  • pixel_level_roc_curve.png"
     )
 
     print(

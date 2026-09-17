@@ -1,31 +1,6 @@
 # ============================================================
 # COLLECT RESULTS — aggregazione automatica delle metriche
 # ============================================================
-#
-# Legge i CSV di metriche gia' salvati da ciascun esperimento
-# (ml_baseline, cnn_ae/*, CutPaste, PatchCore) e li normalizza in
-# un unico schema comune, cosi' da eliminare la necessita' di
-# copiare a mano i numeri in final_plot.py.
-#
-# Estrae inoltre il tempo di training/esecuzione dai report .txt
-# (quando disponibile) tramite regex.
-#
-# Output:
-#   results/summary/model_comparison.csv
-#
-# Esecuzione:
-#   python src/analysis/collect_results.py
-#
-# Se una cartella/CSV non esiste ancora (esperimento non eseguito),
-# la riga viene semplicemente saltata con un warning: lo script non
-# si interrompe.
-# ============================================================
-
-import os
-import re
-# ============================================================
-# COLLECT RESULTS — aggregazione automatica delle metriche
-# ============================================================
 
 import os
 import re
@@ -40,22 +15,17 @@ import numpy as np
 # ============================================================
 # CONFIGURAZIONE E PATH
 # ============================================================
-# Risaliamo l'albero partendo da dove si trova questo script
 current_path = Path(__file__).resolve()
 
-# Cerchiamo la cartella "src" per capire dov'è la radice
 while current_path.name != "src" and current_path.parent != current_path:
     current_path = current_path.parent
 
-# La radice del progetto è la cartella "padre" di "src"
 if current_path.name == "src":
     PROJECT_ROOT = current_path.parent
 else:
-    # Fallback generico (adatta se lo script è a 2 livelli di profondità)
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 RESULTS_DIR = PROJECT_ROOT / "results"
-
 OUT_DIR = RESULTS_DIR / "summary"
 
 # ============================================================
@@ -64,28 +34,24 @@ OUT_DIR = RESULTS_DIR / "summary"
 MODEL_SOURCES = [
     {
         "model": "Isolation Forest",
-        "variant": "baseline",
         "metrics_csv": "ml_baseline/isolation_forest_metrics.csv",
         "report_txt": "ml_baseline/isolation_forest_report.txt",
         "schema": "iforest",
     },
     {
         "model": "CNN Autoencoder",
-        "variant": "MSE+L1 + coarse denoising + post-processing",
         "metrics_csv": "cnn_autoencoder2_nofc_mse_l1_pp/cnn_autoencoder_metrics.csv",
         "report_txt": "cnn_autoencoder2_nofc_mse_l1_pp/cnn_autoencoder_report.txt",
         "schema": "cnn_ae",
     },
     {
         "model": "PatchCore",
-        "variant": "final",
         "metrics_csv": "patchcore/patchcore_image_metrics.csv",
         "report_txt": "patchcore/patchcore_report.txt",
         "schema": "patchcore_image",
     },
     {
         "model": "PatchCore",
-        "variant": "final",
         "metrics_csv": "patchcore/patchcore_pixel_metrics.csv",
         "report_txt": "patchcore/patchcore_report.txt",
         "schema": "patchcore_pixel",
@@ -157,7 +123,7 @@ def extract_time_seconds(report_path: Optional[str]) -> Optional[float]:
 def load_and_normalize(source: Dict) -> Optional[Dict]:
     csv_path = os.path.join(RESULTS_DIR, source["metrics_csv"])
     if not os.path.isfile(csv_path):
-        print(f"  [SKIP] {source['model']} / {source['variant']} — file non trovato: {csv_path}")
+        print(f"  [SKIP] {source['model']} — file non trovato: {csv_path}")
         return None
     df = pd.read_csv(csv_path)
     if len(df) == 0:
@@ -172,7 +138,6 @@ def load_and_normalize(source: Dict) -> Optional[Dict]:
             normalized[target_col] = float("nan")
     normalized["training_time_s"] = extract_time_seconds(source.get("report_txt"))
     normalized["_model"] = source["model"]
-    normalized["_variant"] = source["variant"]
     normalized["_merge"] = source.get("merge", False)
     return normalized
 
@@ -187,11 +152,12 @@ def collect() -> pd.DataFrame:
         normalized = load_and_normalize(source)
         if normalized is None:
             continue
-        key = (normalized["_model"], normalized["_variant"])
+        
+        # Usiamo solo il nome del modello come chiave univoca
+        key = normalized["_model"]
         if key not in rows_by_key:
             rows_by_key[key] = {
                 "model": normalized["_model"],
-                "variant": normalized["_variant"],
             }
         target = rows_by_key[key]
 
@@ -200,26 +166,30 @@ def collect() -> pd.DataFrame:
             if col.startswith("_"):
                 continue
 
-            # Somma i tempi se ci sono più report per lo stesso modello/variante (es. CutPaste Image + Pixel)
+            # Gestione sicura dei tempi computazionali
             if col == "training_time_s":
-                current_time = target.get(col, 0.0)
-                if current_time is None:
-                    current_time = 0.0
+                # Per evitare doppie somme leggendo lo stesso report (es. PatchCore image e pixel)
+                # prendiamo il valore solo la prima volta (o usiamo max)
                 if value is not None:
-                    target[col] = current_time + value
+                    if target.get(col) is None:
+                        target[col] = value
+                    else:
+                        target[col] = max(target[col], value)
                 continue
 
             if pd.notnull(value):
                 target[col] = value
-        print(f"  [OK]   {normalized['_model']} / {normalized['_variant']} ({source['schema']})")
+        print(f"  [OK]   {normalized['_model']} ({source['schema']})")
 
     if not rows_by_key:
         print("\nNessun risultato trovato.")
         sys.exit(1)
 
     summary_df = pd.DataFrame(list(rows_by_key.values()))
+    
+    # Rimosso "variant" dall'ordinamento delle colonne
     ordered_cols = [
-        "model", "variant",
+        "model",
         "image_auroc", "image_ap", "image_f1",
         "image_sensitivity", "image_specificity", "image_bacc",
         "pixel_auroc", "pixel_ap", "pixel_dice", "pixel_iou",
@@ -241,7 +211,6 @@ def collect() -> pd.DataFrame:
     
     rename_columns = {
         "model": "Model",
-        "variant": "Variant",
         "image_auroc": "Img AUROC",
         "image_ap": "Img AP",
         "image_f1": "Img F1",
@@ -259,19 +228,17 @@ def collect() -> pd.DataFrame:
     
     plot_df = summary_df.rename(columns=rename_columns).copy()
     
-    # Individuiamo i valori massimi e minimi per le colonne numeriche prima di trasformarle in stringhe
-    numeric_cols = [c for c in plot_df.columns if c not in ["Model", "Variant"]]
+    numeric_cols = [c for c in plot_df.columns if c != "Model"]
     
     best_values = {}
     for col in numeric_cols:
         temp_col = pd.to_numeric(plot_df[col], errors='coerce')
         if not temp_col.dropna().empty:
             if col == "Time (s)":
-                best_values[col] = temp_col.min() # Il più basso per il tempo
+                best_values[col] = temp_col.min() 
             else:
-                best_values[col] = temp_col.max() # Il più alto per le metriche
+                best_values[col] = temp_col.max() 
 
-    # Ora convertiamo tutto il DataFrame in stringa per evitare conflitti di tipo con Pandas
     formatted_df = plot_df.astype(str)
     
     for col in numeric_cols:
@@ -288,12 +255,12 @@ def collect() -> pd.DataFrame:
                 else:
                     formatted_df.loc[idx, col] = "—"
 
-    # Allarghiamo la figura
     fig, ax = plt.subplots(figsize=(22, len(summary_df) * 0.7 + 3))
     ax.axis("off")
     ax.axis("tight")
 
-    col_widths = [0.12, 0.22] + [0.046] * (len(plot_df.columns) - 2)
+    # Adattamento delle larghezze delle colonne dopo aver rimosso variant
+    col_widths = [0.15] + [0.055] * (len(plot_df.columns) - 1)
 
     table = ax.table(
         cellText=formatted_df.values,
@@ -307,13 +274,11 @@ def collect() -> pd.DataFrame:
     table.set_fontsize(8.5)
     table.scale(1.0, 1.8)
 
-    # Stile dell'intestazione
     for j, col_name in enumerate(plot_df.columns):
         cell = table[(0, j)]
         cell.set_facecolor("#2c3e50")
         cell.set_text_props(weight="bold", color="white")
 
-    # Scansione delle celle per applicare il grassetto e lo sfondo verde ai record migliori
     for i in range(1, len(formatted_df) + 1):
         for j in range(len(plot_df.columns)):
             cell = table[(i, j)]
@@ -323,14 +288,14 @@ def collect() -> pd.DataFrame:
                 clean_text = cell_text.replace("mathbf{", "").replace("}", "")
                 cell.get_text().set_text(clean_text)
                 cell.get_text().set_weight("bold")
-                cell.set_facecolor("#d4edda") # Sfondo verde chiaro per i top score
+                cell.set_facecolor("#d4edda") 
             else:
                 if i % 2 == 0:
                     cell.set_facecolor("#f8f9fa")
                 else:
                     cell.set_facecolor("#ffffff")
 
-    plt.title("Comparative Summary — All Models & Variants (Best in Bold)", fontweight="bold", fontsize=16, pad=25)
+    plt.title("Comparative Summary — All Models (Best in Bold)", fontweight="bold", fontsize=16, pad=25)
     
     img_out_path = os.path.join(OUT_DIR, "model_comparison.png")
     plt.savefig(img_out_path, dpi=300, bbox_inches="tight")

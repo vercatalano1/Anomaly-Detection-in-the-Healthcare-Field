@@ -630,6 +630,39 @@ def plot_image_level_results(y_test, scores, threshold, auroc, ap, cm, out_dir):
     print(f"  ✓ Saved: {path}")
 
 # ============================================================
+# PIXEL-LEVEL ROC CURVE (PatchCore)
+# ============================================================
+
+def save_pixel_roc_curve(masks, anomaly_maps, out_dir):
+    from sklearn.metrics import roc_curve, roc_auc_score
+    
+    y_true = np.concatenate([m.flatten() for m in masks])
+    y_scores = np.concatenate([m.flatten() for m in anomaly_maps])
+    
+    fpr, tpr, _ = roc_curve(y_true, y_scores)
+    auc_val = roc_auc_score(y_true, y_scores)
+    
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.plot(fpr, tpr, linewidth=2.5, color="#1f77b4", label=f"PatchCore (Pixel AUROC = {auc_val:.3f})")
+    ax.plot([0, 1], [0, 1], "--", color="#333333", linewidth=1.5, alpha=0.6)
+    
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel("False Positive Rate (Pixel)", fontweight='bold', fontsize=11)
+    ax.set_ylabel("True Positive Rate (Pixel)", fontweight='bold', fontsize=11)
+    ax.set_title("Pixel-Level ROC Curve", fontweight="bold", pad=15, fontsize=13)
+    ax.legend(loc="lower right", frameon=True, fontsize=10)
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
+    plt.tight_layout()
+    path = os.path.join(out_dir, "pixel_level_roc_curve.png")
+    plt.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"  ✓ Saved pixel-level ROC curve: {path}")
+
+# ============================================================
 # REPORT
 # ============================================================
 def save_report(metrics_img, metrics_pix, bank_size, exec_time, out_dir):
@@ -745,6 +778,9 @@ def run_patchcore_experiment():
         test_labels, test_img_scores, img_threshold, 
         metrics_img['auroc'], metrics_img['ap'], metrics_img['cm'], OUT_DIR
     )
+
+    print("\nGenerating pixel-level ROC curve...")
+    save_pixel_roc_curve(test_masks, test_maps, OUT_DIR)
 
     print("\nGenerating localization visualizations...")
 
