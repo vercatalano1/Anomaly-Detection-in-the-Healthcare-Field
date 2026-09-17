@@ -126,10 +126,10 @@ Basato su [Roth et al., CVPR 2022](https://arxiv.org/abs/2106.08265). Nessun tra
 │   │
 │   ├── dl/
 │   │   ├── cnn_ae/
-│   │   │   ├── 3.post_processing.py # CNN Autoencoder (MSE+L1, denoising, post-processing)
+│   │   │   ├── ae_baseline.py # CNN Autoencoder (MSE+L1, denoising, post-processing)
 │   │   │
 │   │   └── PatchCore/
-│   │       └── 1.baseline.py        # PatchCore (ResNet-18 + memory bank)
+│   │       └── pc.baseline.py        # PatchCore (ResNet-18 + memory bank)
 │   │
 │   ├── collect_results.py           # Aggregazione automatica delle metriche 
 │   ├── final_plot.py                # Grafici comparativi finali 
@@ -152,7 +152,7 @@ Basato su [Roth et al., CVPR 2022](https://arxiv.org/abs/2106.08265). Nessun tra
 
 ## 6. Risultati
 
-Tutti i valori sono estratti automaticamente da `src/collect_results.py` a partire dai CSV di ciascun esperimento (`results/summary model_comparison.csv`). 
+Tutti i valori sono estratti automaticamente da `src/collect_results.py` a partire dai CSV di ciascun esperimento. 
 
 ### 6.1 Confronto principale — image-level e pixel-level
 
@@ -235,8 +235,8 @@ python src/data_analysis/validate_dataloader.py
 
 # 3. Esecuzione modelli
 python src/ml/ml_baseline.py
-python src/dl/cnn_ae/3.post_processing.py
-python src/dl/PatchCore/1.baseline.py
+python src/dl/cnn_ae/ae_baseline.py
+python src/dl/PatchCore/pc.baseline.py
 
 # 4. Aggregazione risultati e grafici comparativi finali
 python src/collect_results.py
