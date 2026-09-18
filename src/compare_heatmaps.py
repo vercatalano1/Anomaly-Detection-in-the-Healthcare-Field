@@ -12,13 +12,7 @@ from data_analysis.dataloader import get_dataset
 
 IMAGE_SIZE = 64
 
-VISUALIZATION_INDICES = [
-    828,
-    1314,
-    1801,
-    2288,
-    2775
-]
+VISUALIZATION_INDICES = [414, 1305, 2277, 2340, 2603, 2652]
 
 CNN_AE_DIR = os.path.join(
     "results",

@@ -786,7 +786,7 @@ def run_patchcore_experiment():
 
     # Seleziona 5 slice tumorali distribuite uniformemente
     # tra tutte le slice tumorali del test set
-    tumor_indices = np.where(test_labels == 1)[0]
+    '''tumor_indices = np.where(test_labels == 1)[0]
 
     n_samples = min(N_VISUALIZATION_SAMPLES, len(tumor_indices))
 
@@ -812,6 +812,91 @@ def run_patchcore_experiment():
 
         print(
             f"  Saving visualization: "
+            f"index={index}, "
+            f"patient={sample['patient_id']}, "
+            f"name={sample['name']}"
+        )
+
+        save_heatmap(
+            prepare_image(sample["img"]),
+            prepare_mask(sample["mask"]),
+            test_maps[index],
+            pix_threshold,
+            int(test_labels[index]),
+            index,
+            HEATMAP_DIR
+        )'''
+
+    print("\nGenerating localization visualizations...")
+
+    # Selezione dei casi basata esclusivamente sulla ground truth
+    lesion_sizes = np.zeros(len(test_labels))
+    n_components = np.zeros(len(test_labels), dtype=int)
+
+    for i in range(len(test_labels)):
+        true_mask = np.squeeze(test_masks[i]).astype(np.uint8)
+
+        if test_labels[i] == 1:
+            lesion_sizes[i] = np.sum(true_mask)
+
+            labeled_mask, num_components = ndimage.label(true_mask)
+            n_components[i] = num_components
+
+    tumor_indices = np.where(test_labels == 1)[0]
+    healthy_indices = np.where(test_labels == 0)[0]
+
+    sorted_tumors = tumor_indices[np.argsort(lesion_sizes[tumor_indices])]
+
+    # 1. Healthy
+    healthy_idx = healthy_indices[len(healthy_indices) // 2]
+
+    # 2. Lesione molto piccola
+    very_small_idx = sorted_tumors[0]
+
+    # 3. Lesione piccola
+    small_pos = int(0.25 * (len(sorted_tumors) - 1))
+    small_idx = sorted_tumors[small_pos]
+
+    # 4. Lesione media
+    medium_pos = int(0.50 * (len(sorted_tumors) - 1))
+    medium_idx = sorted_tumors[medium_pos]
+
+    # 5. Lesione grande
+    large_pos = int(0.75 * (len(sorted_tumors) - 1))
+    large_idx = sorted_tumors[large_pos]
+
+    # 6. Più lesioni
+    multiple_candidates = tumor_indices[n_components[tumor_indices] >= 2]
+
+    if len(multiple_candidates) > 0:
+        multiple_idx = multiple_candidates[
+            np.argmax(n_components[multiple_candidates])
+        ]
+    else:
+        multiple_idx = sorted_tumors[-1]
+
+    raw_cases = [
+        ("Healthy", healthy_idx),
+        ("Very small lesion", very_small_idx),
+        ("Small lesion", small_idx),
+        ("Medium lesion", medium_idx),
+        ("Large lesion", large_idx),
+        ("Multiple lesions", multiple_idx),
+    ]
+
+    visualization_cases = []
+    used_indices = set()
+
+    for category, idx in raw_cases:
+        if idx not in used_indices:
+            visualization_cases.append((category, int(idx)))
+            used_indices.add(idx)
+
+    for category, index in visualization_cases:
+        sample = test_ds[index]
+
+        print(
+            f"  Saving {category}: "
             f"index={index}, "
             f"patient={sample['patient_id']}, "
             f"name={sample['name']}"
