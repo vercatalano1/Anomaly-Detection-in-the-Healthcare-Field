@@ -1697,7 +1697,7 @@ def plot_image_level_results(
             fill=True,
             color="#2ca02c",
             alpha=0.4,
-            label="Healthy",
+            label="Normal",
             ax=ax
         )
 
@@ -1724,15 +1724,15 @@ def plot_image_level_results(
     )
 
     ax.set_xlabel(
-        "Reconstruction MSE"
+        "Anomaly Score"
     )
 
     ax.set_ylabel(
-        "Density"
+        "Densità"
     )
 
     ax.set_title(
-        "(A) Image-level Anomaly Scores",
+        "(A) Distribuzione Anomaly Score",
         fontweight="bold"
     )
 
@@ -1752,25 +1752,25 @@ def plot_image_level_results(
         cbar=False,
         ax=ax,
         xticklabels=[
-            "Healthy",
+            "Normal",
             "Tumor"
         ],
         yticklabels=[
-            "Healthy",
+            "Normal",
             "Tumor"
         ]
     )
 
     ax.set_xlabel(
-        "Predicted"
+        "Predetta"
     )
 
     ax.set_ylabel(
-        "True"
+        "Reale"
     )
 
     ax.set_title(
-        "(B) Confusion Matrix",
+        "(B) Matrice di Confusione",
         fontweight="bold"
     )
 
@@ -1807,11 +1807,11 @@ def plot_image_level_results(
     )
 
     ax.set_title(
-        "(C) ROC Curve",
+        "(C) Curva ROC",
         fontweight="bold"
     )
 
-    ax.legend()
+    ax.legend(loc="lower right")
 
     # --------------------------------------------------------
     # PR
@@ -1853,7 +1853,7 @@ def plot_image_level_results(
     )
 
     ax.set_title(
-        "(D) Precision-Recall Curve",
+        "(D) Curva Precision-Recall",
         fontweight="bold"
     )
 
@@ -2217,7 +2217,7 @@ def save_pixel_roc_curve(y_true_pixels, y_scores_pixels, out_dir):
     ax.set_ylim([0.0, 1.05])
     ax.set_xlabel("False Positive Rate (Pixel)", fontweight='bold', fontsize=11)
     ax.set_ylabel("True Positive Rate (Pixel)", fontweight='bold', fontsize=11)
-    ax.set_title("Pixel-Level ROC Curve", fontweight="bold", pad=15, fontsize=13)
+    ax.set_title("Curva ROC Pixel-Level", fontweight="bold", pad=15, fontsize=13)
     ax.legend(loc="lower right", frameon=True, fontsize=10)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.spines['top'].set_visible(False)
@@ -3149,7 +3149,7 @@ def run_experiment() -> None:
             vmin=0,
             vmax=1
         )
-        axes[0].set_title("Original")
+        axes[0].set_title("Immagine Originale")
         
         # 2. Ground Truth
         axes[1].imshow(
@@ -3174,7 +3174,7 @@ def run_experiment() -> None:
             vmin=0,
             vmax=1
         )
-        axes[2].set_title("PatchCore Anomaly Map")
+        axes[2].set_title("Mappa di Anomalia")
         
         fig.colorbar(
             im,
@@ -3197,7 +3197,7 @@ def run_experiment() -> None:
             vmin=0,
             vmax=1
         )
-        axes[3].set_title("Prediction")
+        axes[3].set_title("Maschera Predetta")
         
         # 5. Anomaly + GT
         axes[4].imshow(
@@ -3221,12 +3221,12 @@ def run_experiment() -> None:
             linewidths=1
         )
         
-        axes[4].set_title("Anomaly + GT")
+        axes[4].set_title("Anomalia + GT")
         for ax in axes:
             ax.axis("off")
     
         fig.suptitle(
-            f"CNN-AE Localization | "
+            f"Localizzazione CNN-AE | "
             f"index={index} | "
             f"label={int(y_test[index])}"
         )

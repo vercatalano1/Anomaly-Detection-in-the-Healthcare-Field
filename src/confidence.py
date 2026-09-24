@@ -512,7 +512,7 @@ def plot_pairwise_forest(df_pair: pd.DataFrame):
     for label in ax.get_yticklabels():
         label.set_color(MODEL_COLORS.get(label.get_text(), "#333333"))
 
-    ax.set_xlabel(f"Δ AUROC ({REFERENCE_MODEL_NAME} − Modello Challenger)", fontweight="bold", fontsize=11)
+    ax.set_xlabel(f"Δ AUROC ({REFERENCE_MODEL_NAME} − Modello Competitore)", fontweight="bold", fontsize=11)
     ax.set_title(f"Test di DeLong: {REFERENCE_MODEL_NAME} vs Altri Modelli", fontweight="bold", pad=15, fontsize=13)
     
     ax.grid(axis="x", linestyle="--", alpha=0.5, color='gray', zorder=1)

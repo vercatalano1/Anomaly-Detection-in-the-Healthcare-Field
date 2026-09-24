@@ -473,7 +473,7 @@ def save_heatmap(
         vmin=0,
         vmax=1
     )
-    axes[0].set_title("Original")
+    axes[0].set_title("Immagine Originale")
 
     # 2. Ground Truth
     axes[1].imshow(
@@ -498,7 +498,7 @@ def save_heatmap(
         vmin=0,
         vmax=1
     )
-    axes[2].set_title("PatchCore Anomaly Map")
+    axes[2].set_title("Mappa di Anomalia")
 
     fig.colorbar(
         im,
@@ -521,7 +521,7 @@ def save_heatmap(
         vmin=0,
         vmax=1
     )
-    axes[3].set_title("Prediction")
+    axes[3].set_title("Maschera Predetta")
 
     # 5. Anomaly + GT
     axes[4].imshow(
@@ -545,14 +545,14 @@ def save_heatmap(
         linewidths=1
     )
 
-    axes[4].set_title("Anomaly + GT")
+    axes[4].set_title("Anomalia + GT")
 
     # Remove axes
     for ax in axes:
         ax.axis("off")
 
     fig.suptitle(
-        f"PatchCore Localization | "
+        f"Localizzazione PatchCore | "
         f"index={index} | "
         f"label={label}"
     )
@@ -589,20 +589,20 @@ def plot_image_level_results(y_test, scores, threshold, auroc, ap, cm, out_dir):
     ax = axes[0, 0]
     healthy = scores[y_test == 0]
     tumor = scores[y_test == 1]
-    if len(healthy) > 1: sns.kdeplot(healthy, fill=True, color="#2ca02c", alpha=0.4, label="Healthy", ax=ax, linewidth=2)
+    if len(healthy) > 1: sns.kdeplot(healthy, fill=True, color="#2ca02c", alpha=0.4, label="Normal", ax=ax, linewidth=2)
     if len(tumor) > 1: sns.kdeplot(tumor, fill=True, color="#d62728", alpha=0.4, label="Tumor", ax=ax, linewidth=2)
     ax.axvline(threshold, linestyle="--", color="black", linewidth=2, label=f"Threshold = {threshold:.3f}")
     ax.set_xlabel("Anomaly Score")
-    ax.set_ylabel("Density")
-    ax.set_title("(A) Image-level Anomaly Scores", fontweight="bold")
+    ax.set_ylabel("Densità")
+    ax.set_title("(A) Distribuzione Anomaly Score", fontweight="bold")
     ax.legend()
     
     # (B) CONFUSION MATRIX
     ax = axes[0, 1]
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False, ax=ax, xticklabels=["Healthy", "Tumor"], yticklabels=["Healthy", "Tumor"])
-    ax.set_xlabel("Predicted")
-    ax.set_ylabel("True")
-    ax.set_title("(B) Confusion Matrix", fontweight="bold")
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False, ax=ax, xticklabels=["Normal", "Tumor"], yticklabels=["Normal", "Tumor"])
+    ax.set_xlabel("Predetta")
+    ax.set_ylabel("Reale")
+    ax.set_title("(B) Matrice di Confusione", fontweight="bold")
     
     # (C) ROC
     ax = axes[1, 0]
@@ -610,7 +610,7 @@ def plot_image_level_results(y_test, scores, threshold, auroc, ap, cm, out_dir):
     ax.plot([0, 1], [0, 1], "--", color="gray", alpha=0.6)
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title("(C) ROC Curve", fontweight="bold")
+    ax.set_title("(C) Curva ROC", fontweight="bold")
     ax.legend(loc="lower right")
     
     # (D) PR
@@ -620,7 +620,7 @@ def plot_image_level_results(y_test, scores, threshold, auroc, ap, cm, out_dir):
     ax.axhline(baseline, linestyle="--", color="gray", alpha=0.6, label=f"Baseline = {baseline:.3f}")
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
-    ax.set_title("(D) Precision-Recall Curve", fontweight="bold")
+    ax.set_title("(D) Curva Precision-Recall", fontweight="bold")
     ax.legend(loc="upper right")
     
     plt.tight_layout()
@@ -646,11 +646,11 @@ def save_pixel_roc_curve(masks, anomaly_maps, out_dir):
     ax.plot(fpr, tpr, linewidth=2.5, color="#1f77b4", label=f"PatchCore (Pixel AUROC = {auc_val:.3f})")
     ax.plot([0, 1], [0, 1], "--", color="#333333", linewidth=1.5, alpha=0.6)
     
-    ax.set_xlim([0.0, 1.0])
+    ax.set_xlim([0.0, 1.0]) 
     ax.set_ylim([0.0, 1.05])
     ax.set_xlabel("False Positive Rate (Pixel)", fontweight='bold', fontsize=11)
     ax.set_ylabel("True Positive Rate (Pixel)", fontweight='bold', fontsize=11)
-    ax.set_title("Pixel-Level ROC Curve", fontweight="bold", pad=15, fontsize=13)
+    ax.set_title("Curva ROC Pixel-Level", fontweight="bold", pad=15, fontsize=13)
     ax.legend(loc="lower right", frameon=True, fontsize=10)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.spines['top'].set_visible(False)

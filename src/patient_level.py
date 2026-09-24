@@ -235,7 +235,7 @@ def run() -> Optional[pd.DataFrame]:
     plt.ylim([0.0, 1.05])
     plt.xlabel("False Positive Rate", fontweight='bold')
     plt.ylabel("True Positive Rate", fontweight='bold')
-    plt.title("Patient-Level ROC Curves", fontweight="bold", pad=15, fontsize=14)
+    plt.title("Curve ROC Patient-Level", fontweight="bold", pad=15, fontsize=14)
     plt.legend(loc="lower right", frameon=True)
     plt.grid(True, linestyle="--", alpha=0.6)
     

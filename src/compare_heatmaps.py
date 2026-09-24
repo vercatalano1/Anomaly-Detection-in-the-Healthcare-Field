@@ -84,7 +84,7 @@ def plot_all_comparisons():
         figsize=(16, 12)
     )
 
-    row_labels = ["Original", "Ground Truth", "CNN-AE", "PatchCore"]
+    row_labels = ["Immagine Originale", "Ground Truth", "CNN-AE", "PatchCore"]
 
     for col_idx, index in enumerate(VISUALIZATION_INDICES):
         index = int(index)
@@ -165,7 +165,7 @@ def plot_all_comparisons():
                 axes[r, c].set_ylabel(row_labels[r], fontsize=14, labelpad=15, fontweight="bold")
 
     # Spaziatura generale
-    fig.suptitle("Pixel-Level Localization Comparison", fontsize=18, fontweight="bold", y=0.98)
+    fig.suptitle("Confronto di Localizzazione Pixel-Level", fontsize=18, fontweight="bold", y=0.98)
     
     # Riduce lo spazio vuoto tra le immagini rendendo la griglia compatta
     plt.subplots_adjust(wspace=0.05, hspace=0.05)

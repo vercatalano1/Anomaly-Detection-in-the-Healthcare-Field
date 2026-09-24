@@ -210,7 +210,7 @@ def collect() -> pd.DataFrame:
     # ============================================================
     
     rename_columns = {
-        "model": "Model",
+        "model": "Modello",
         "image_auroc": "Img AUROC",
         "image_ap": "Img AP",
         "image_f1": "Img F1",
@@ -223,12 +223,12 @@ def collect() -> pd.DataFrame:
         "pixel_iou": "Pixel IoU",
         "pixel_sensitivity": "Pix Sens",
         "pixel_specificity": "Pix Spec",
-        "training_time_s": "Time (s)"
+        "training_time_s": "Tempo (s)"
     }
     
     plot_df = summary_df.rename(columns=rename_columns).copy()
     
-    numeric_cols = [c for c in plot_df.columns if c != "Model"]
+    numeric_cols = [c for c in plot_df.columns if c != "Modello"]
     
     best_values = {}
     for col in numeric_cols:
@@ -295,7 +295,7 @@ def collect() -> pd.DataFrame:
                 else:
                     cell.set_facecolor("#ffffff")
 
-    plt.title("Comparative Summary — All Models (Best in Bold)", fontweight="bold", fontsize=16, pad=25)
+    plt.title("Sintesi Comparativa dei Modelli (Valori Migliori in Grassetto)", fontweight="bold", fontsize=16, pad=25)
     
     img_out_path = os.path.join(OUT_DIR, "model_comparison.png")
     plt.savefig(img_out_path, dpi=300, bbox_inches="tight")

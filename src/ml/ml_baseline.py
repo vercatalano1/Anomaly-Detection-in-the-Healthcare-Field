@@ -509,7 +509,7 @@ def plot_results(
             fill=True,
             color="#2ca02c",
             alpha=0.4,
-            label="Healthy",
+            label="Normal",
             ax=ax,
             linewidth=2
         )
@@ -542,11 +542,11 @@ def plot_results(
     )
 
     ax.set_ylabel(
-        "Density"
+        "Densità"
     )
 
     ax.set_title(
-        "(A) Anomaly Score Distribution",
+        "(A) Distribuzione Anomaly Score",
         fontweight="bold"
     )
 
@@ -569,11 +569,11 @@ def plot_results(
         ax=ax,
         cbar=False,
         xticklabels=[
-            "Healthy",
+            "Normal",
             "Tumor"
         ],
         yticklabels=[
-            "Healthy",
+            "Normal",
             "Tumor"
         ],
         annot_kws={
@@ -583,15 +583,15 @@ def plot_results(
     )
 
     ax.set_ylabel(
-        "True Label"
+        "Reale"
     )
 
     ax.set_xlabel(
-        "Predicted Label"
+        "Predetta"
     )
 
     ax.set_title(
-        "(B) Confusion Matrix",
+        "(B) Matrice di Confusione",
         fontweight="bold"
     )
 
@@ -629,7 +629,7 @@ def plot_results(
     )
 
     ax.set_title(
-        "(C) ROC Curve",
+        "(C) Curva ROC", 
         fontweight="bold"
     )
 
@@ -672,7 +672,7 @@ def plot_results(
     )
 
     ax.set_xlabel(
-        "Recall (Sensitivity)"
+        "Recall"
     )
 
     ax.set_ylabel(
@@ -680,7 +680,7 @@ def plot_results(
     )
 
     ax.set_title(
-        "(D) Precision-Recall Curve",
+        "(D) Curva Precision-Recall",
         fontweight="bold"
     )
 

@@ -70,7 +70,7 @@ def plot_image_level_performance(plot_df):
     ax.set_xticklabels(plot_df["model"], fontweight='bold')
     ax.set_ylabel("Score", fontweight='bold')
     ax.set_ylim(0, 1.08)
-    ax.set_title("Image-Level Performance", fontweight="bold", pad=15)
+    ax.set_title("Prestazioni Image-Level", fontweight="bold", pad=15)
     ax.grid(axis="y", linestyle="--", alpha=0.3)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3, frameon=False)
 
@@ -112,7 +112,7 @@ def plot_pixel_level_performance(plot_df):
     ax.set_xticklabels(pixel_df["model"], fontweight='bold')
     ax.set_ylabel("Score", fontweight='bold')
     ax.set_ylim(0, 1.08)
-    ax.set_title("Pixel-Level Localization Performance", fontweight="bold", pad=15)
+    ax.set_title("Prestazioni di Localizzazione Pixel-Level", fontweight="bold", pad=15)
     ax.grid(axis="y", linestyle="--", alpha=0.3)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=3, frameon=False)
 
@@ -154,7 +154,7 @@ def plot_slice_level_roc():
     ax.set_ylim([0.0, 1.05])
     ax.set_xlabel("False Positive Rate", fontweight='bold')
     ax.set_ylabel("True Positive Rate", fontweight='bold')
-    ax.set_title("Slice-Level ROC Curves", fontweight="bold", pad=15, fontsize=13)
+    ax.set_title("Curve ROC Slice-Level", fontweight="bold", pad=15, fontsize=13)
     ax.legend(loc="lower right", frameon=True)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.spines['top'].set_visible(False)
@@ -185,7 +185,7 @@ def plot_computational_cost(plot_df):
             ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() * 1.1, text, 
                     ha='center', va='bottom', fontweight='bold', color='#333333')
 
-    ax.set_ylabel("Tempo (secondi) - Log Scale", fontweight='bold')
+    ax.set_ylabel("Tempo (secondi)", fontweight='bold')
     ax.set_title("Costo Computazionale", fontweight="bold", pad=15, fontsize=13)
     ax.set_yscale("log")
     ax.set_xticks(np.arange(len(models)))
@@ -217,7 +217,7 @@ def plot_tradeoff(plot_df):
 
     ax.set_xlabel("Pixel-Level Dice (Localizzazione)", fontweight='bold')
     ax.set_ylabel("Image-Level AUROC (Classificazione)", fontweight='bold')
-    ax.set_title("Trade-off: Detection vs Localization", fontweight="bold", pad=15, fontsize=13)
+    ax.set_title("Trade-off: Classificazione vs Localizzazione", fontweight="bold", pad=15, fontsize=13)
     ax.set_xlim(0.0, 1.05)
     ax.set_ylim(0.5, 1.05)
     ax.grid(True, linestyle="--", alpha=0.6, zorder=0)
@@ -259,11 +259,11 @@ def plot_slice_level_pr_curves():
         ax.axhline(baseline, linestyle="--", color="#333333", linewidth=1.5, alpha=0.6, label=f"Baseline (Prevalence = {baseline:.3f})")
 
     ax.set_xlim([0.0, 1.0])
-    ax.set_ylim([0.0, 1.05])
-    ax.set_xlabel("Recall (Sensitivity)", fontweight='bold')
+    ax.set_ylim([0.6, 1.05])
+    ax.set_xlabel("Recall", fontweight='bold')
     ax.set_ylabel("Precision", fontweight='bold')
-    ax.set_title("Slice-Level Precision-Recall Curves", fontweight="bold", pad=15, fontsize=13)
-    ax.legend(loc="lower left", frameon=True, fontsize=10)
+    ax.set_title("Curve Precision-Recall Slice-Level", fontweight="bold", pad=15, fontsize=13)
+    ax.legend(loc="lower right", frameon=True, fontsize=10)
     ax.grid(True, linestyle="--", alpha=0.6)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
