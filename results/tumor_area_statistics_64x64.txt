@@ -1,0 +1,50 @@
+======================================================================
+TUMOR AREA STATISTICS — TEST SET
+======================================================================
+
+CONFIGURATION
+----------------------------------------------------------------------
+Image resolution: 64 x 64
+Total pixels per image: 4096
+Tumor slices: 1948
+Mask interpolation: nearest-neighbor
+Mask representation: binary
+
+AREA IN PIXELS
+----------------------------------------------------------------------
+Minimum: 12 pixels
+Maximum: 616 pixels
+Mean: 182.5883 pixels
+Median: 165.0000 pixels
+Standard deviation: 118.7140 pixels
+
+AREA AS PERCENTAGE OF IMAGE
+----------------------------------------------------------------------
+Minimum: 0.2930%
+Maximum: 15.0391%
+Mean: 4.4577%
+Median: 4.0283%
+Standard deviation: 2.8983%
+
+REFERENCE TO min_size = 20 PIXELS
+----------------------------------------------------------------------
+Area < 20 pixels: 89
+Percentage < 20 pixels: 4.5688%
+Area = 20 pixels: 9
+Area <= 20 pixels: 98
+Percentage <= 20 pixels: 5.0308%
+
+10 SMALLEST TUMOR AREAS
+----------------------------------------------------------------------
+ 1. index=2603 | area=  12 px | percentage=0.2930% | patient=BraTS2021_01651 | image=BraTS2021_01651_flair_41
+ 2. index=1953 | area=  12 px | percentage=0.2930% | patient=BraTS2021_01583 | image=BraTS2021_01583_flair_11
+ 3. index=2075 | area=  13 px | percentage=0.3174% | patient=BraTS2021_01596 | image=BraTS2021_01596_flair_11
+ 4. index=2734 | area=  13 px | percentage=0.3174% | patient=BraTS2021_01663 | image=BraTS2021_01663_flair_37
+ 5. index=1057 | area=  13 px | percentage=0.3174% | patient=BraTS2021_01490 | image=BraTS2021_01490_flair_12
+ 6. index= 858 | area=  13 px | percentage=0.3174% | patient=BraTS2021_01470 | image=BraTS2021_01470_flair_35
+ 7. index=1191 | area=  13 px | percentage=0.3174% | patient=BraTS2021_01503 | image=BraTS2021_01503_flair_4
+ 8. index= 929 | area=  14 px | percentage=0.3418% | patient=BraTS2021_01477 | image=BraTS2021_01477_flair_50
+ 9. index=2063 | area=  14 px | percentage=0.3418% | patient=BraTS2021_01595 | image=BraTS2021_01595_flair_11
+10. index=2058 | area=  14 px | percentage=0.3418% | patient=BraTS2021_01594 | image=BraTS2021_01594_flair_37
+
+======================================================================

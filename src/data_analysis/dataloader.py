@@ -890,6 +890,351 @@ def print_dataset_summary(
     print("=" * 60)
     print()
 
+# ==========================================================
+# TUMOR AREA DISTRIBUTION — 64x64
+# ==========================================================
+
+def save_tumor_area_statistics(
+    dataset: BraTSDataset,
+    output_txt: str = "tumor_area_statistics_64x64.txt",
+    output_png: str = "tumor_area_distribution_64x64.png"
+) -> None:
+    """
+    Calcola le statistiche dell'area delle lesioni tumorali
+    sulle maschere finali 64x64 utilizzate dal dataset.
+
+    Salva:
+        - statistiche numeriche in un file .txt
+        - istogramma della distribuzione in formato .png
+    """
+
+    import matplotlib.pyplot as plt
+
+    if dataset.mode != "test":
+        raise ValueError(
+            "Le statistiche dell'area tumorale sono "
+            "calcolabili solo sul TEST set."
+        )
+
+    # ------------------------------------------------------
+    # ESTRAZIONE AREE TUMORALI
+    # ------------------------------------------------------
+
+    tumor_areas = []
+    tumor_indices = []
+
+    for i, (label, mask) in enumerate(
+        zip(dataset.labels, dataset.masks)
+    ):
+
+        if label == 1:
+
+            area = int(np.sum(mask > 0))
+
+            tumor_areas.append(area)
+            tumor_indices.append(i)
+
+    if len(tumor_areas) == 0:
+        raise RuntimeError(
+            "Nessuna maschera tumorale trovata."
+        )
+
+    tumor_areas = np.asarray(
+        tumor_areas,
+        dtype=np.int64
+    )
+
+    # ------------------------------------------------------
+    # DIMENSIONE IMMAGINE
+    # ------------------------------------------------------
+
+    total_pixels = dataset.res * dataset.res
+
+    # ------------------------------------------------------
+    # STATISTICHE PIXEL
+    # ------------------------------------------------------
+
+    min_area = int(np.min(tumor_areas))
+    max_area = int(np.max(tumor_areas))
+    mean_area = float(np.mean(tumor_areas))
+    median_area = float(np.median(tumor_areas))
+    std_area = float(np.std(tumor_areas))
+
+    # ------------------------------------------------------
+    # PERCENTUALE DELL'IMMAGINE
+    # ------------------------------------------------------
+
+    area_percent = (
+        tumor_areas / total_pixels
+    ) * 100.0
+
+    min_percent = float(np.min(area_percent))
+    max_percent = float(np.max(area_percent))
+    mean_percent = float(np.mean(area_percent))
+    median_percent = float(np.median(area_percent))
+    std_percent = float(np.std(area_percent))
+
+    # ------------------------------------------------------
+    # min_size = 20
+    # ------------------------------------------------------
+
+    n_below_20 = int(
+        np.sum(tumor_areas < 20)
+    )
+
+    n_equal_20 = int(
+        np.sum(tumor_areas == 20)
+    )
+
+    n_at_most_20 = int(
+        np.sum(tumor_areas <= 20)
+    )
+
+    percentage_below_20 = (
+        100.0 * n_below_20 / len(tumor_areas)
+    )
+
+    percentage_at_most_20 = (
+        100.0 * n_at_most_20 / len(tumor_areas)
+    )
+
+    # ------------------------------------------------------
+    # INDICI DELLE 10 LESIONI PIÙ PICCOLE
+    # ------------------------------------------------------
+
+    min_indices = np.argsort(tumor_areas)[:10]
+
+    # ------------------------------------------------------
+    # SALVATAGGIO GRAFICO
+    # ------------------------------------------------------
+
+    plt.figure(figsize=(9, 6))
+
+    plt.hist(
+        tumor_areas,
+        bins=30,
+        edgecolor="black"
+    )
+
+    plt.axvline(
+        median_area,
+        linestyle=":",
+        linewidth=2,
+        label=f"Mediana = {median_area:.1f} px"
+    )
+
+    plt.xlabel(
+        "Area tumorale (pixel)"
+    )
+
+    plt.ylabel(
+        "Numero di slice"
+    )
+
+    plt.title(
+        "Distribuzione dell'area tumorale"
+    )
+
+    plt.legend()
+
+    plt.grid(
+        axis="y",
+        alpha=0.3
+    )
+
+    plt.tight_layout()
+
+    plt.savefig(
+        output_png,
+        dpi=300,
+        bbox_inches="tight"
+    )
+
+    plt.close()
+
+    # ------------------------------------------------------
+    # SALVATAGGIO TXT
+    # ------------------------------------------------------
+
+    with open(
+        output_txt,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        f.write("=" * 70 + "\n")
+        f.write(
+            "TUMOR AREA STATISTICS — TEST SET\n"
+        )
+        f.write("=" * 70 + "\n\n")
+
+        f.write("CONFIGURATION\n")
+        f.write("-" * 70 + "\n")
+        f.write(
+            f"Image resolution: {dataset.res} x {dataset.res}\n"
+        )
+        f.write(
+            f"Total pixels per image: {total_pixels}\n"
+        )
+        f.write(
+            f"Tumor slices: {len(tumor_areas)}\n"
+        )
+        f.write(
+            "Mask interpolation: nearest-neighbor\n"
+        )
+        f.write(
+            "Mask representation: binary\n"
+        )
+        f.write("\n")
+
+        f.write("AREA IN PIXELS\n")
+        f.write("-" * 70 + "\n")
+        f.write(
+            f"Minimum: {min_area} pixels\n"
+        )
+        f.write(
+            f"Maximum: {max_area} pixels\n"
+        )
+        f.write(
+            f"Mean: {mean_area:.4f} pixels\n"
+        )
+        f.write(
+            f"Median: {median_area:.4f} pixels\n"
+        )
+        f.write(
+            f"Standard deviation: {std_area:.4f} pixels\n"
+        )
+        f.write("\n")
+
+        f.write("AREA AS PERCENTAGE OF IMAGE\n")
+        f.write("-" * 70 + "\n")
+        f.write(
+            f"Minimum: {min_percent:.4f}%\n"
+        )
+        f.write(
+            f"Maximum: {max_percent:.4f}%\n"
+        )
+        f.write(
+            f"Mean: {mean_percent:.4f}%\n"
+        )
+        f.write(
+            f"Median: {median_percent:.4f}%\n"
+        )
+        f.write(
+            f"Standard deviation: {std_percent:.4f}%\n"
+        )
+        f.write("\n")
+
+        f.write("REFERENCE TO min_size = 20 PIXELS\n")
+        f.write("-" * 70 + "\n")
+        f.write(
+            f"Area < 20 pixels: {n_below_20}\n"
+        )
+        f.write(
+            f"Percentage < 20 pixels: "
+            f"{percentage_below_20:.4f}%\n"
+        )
+        f.write(
+            f"Area = 20 pixels: {n_equal_20}\n"
+        )
+        f.write(
+            f"Area <= 20 pixels: {n_at_most_20}\n"
+        )
+        f.write(
+            f"Percentage <= 20 pixels: "
+            f"{percentage_at_most_20:.4f}%\n"
+        )
+        f.write("\n")
+
+        f.write("10 SMALLEST TUMOR AREAS\n")
+        f.write("-" * 70 + "\n")
+
+        for rank, idx in enumerate(
+            min_indices,
+            start=1
+        ):
+
+            dataset_idx = tumor_indices[idx]
+
+            image_name = dataset.img_ids[
+                dataset_idx
+            ]
+
+            patient_id = dataset.patient_ids[
+                dataset_idx
+            ]
+
+            area = tumor_areas[idx]
+            percentage = area_percent[idx]
+
+            f.write(
+                f"{rank:2d}. "
+                f"index={dataset_idx:4d} | "
+                f"area={area:4d} px | "
+                f"percentage={percentage:.4f}% | "
+                f"patient={patient_id} | "
+                f"image={image_name}\n"
+            )
+
+        f.write("\n")
+        f.write("=" * 70 + "\n")
+
+    # ------------------------------------------------------
+    # OUTPUT TERMINALE
+    # ------------------------------------------------------
+
+    print()
+    print("=" * 70)
+    print("TUMOR AREA STATISTICS — 64x64")
+    print("=" * 70)
+
+    print(
+        f"Tumor slices:       {len(tumor_areas)}"
+    )
+
+    print(
+        f"Minimum area:       {min_area} px"
+    )
+
+    print(
+        f"Maximum area:       {max_area} px"
+    )
+
+    print(
+        f"Mean area:          {mean_area:.4f} px"
+    )
+
+    print(
+        f"Median area:        {median_area:.4f} px"
+    )
+
+    print(
+        f"Std area:            {std_area:.4f} px"
+    )
+
+    print(
+        f"Area < 20 px:       "
+        f"{n_below_20} "
+        f"({percentage_below_20:.4f}%)"
+    )
+
+    print(
+        f"Area <= 20 px:      "
+        f"{n_at_most_20} "
+        f"({percentage_at_most_20:.4f}%)"
+    )
+
+    print()
+    print(
+        f"TXT saved to: {output_txt}"
+    )
+
+    print(
+        f"Figure saved to: {output_png}"
+    )
+
+    print("=" * 70)
+
 
 # ==========================================================
 # INTEGRITY TEST
@@ -972,6 +1317,12 @@ if __name__ == "__main__":
             img_size=64,
             mode="test",
             return_original=True
+        )
+
+        save_tumor_area_statistics(
+            dataset=test_ds,
+            output_txt="results/tumor_area_statistics_64x64.txt",
+            output_png="results/tumor_area_distribution_64x64.png"
         )
 
         #temporaneo
