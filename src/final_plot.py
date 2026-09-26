@@ -303,8 +303,8 @@ def plot_dice_boxplot():
             tumor_indices.append(i)
 
     models_info = {
-        "CNN Autoencoder": {"dir": "results/cnn_autoencoder2_nofc_mse_l1_pp/anomaly_maps", "threshold": 0.045},
-        "PatchCore": {"dir": "results/patchcore/anomaly_maps", "threshold": 2.15}
+        "CNN Autoencoder": {"dir": "results/cnn_autoencoder2_nofc_mse_l1_pp/anomaly_maps", "threshold": 0.124},
+        "PatchCore": {"dir": "results/patchcore/anomaly_maps", "threshold": 1.154}
     }
 
     dice_results = {}
