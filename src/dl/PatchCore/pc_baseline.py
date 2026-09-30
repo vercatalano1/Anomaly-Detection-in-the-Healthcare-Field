@@ -717,6 +717,7 @@ def run_patchcore_experiment():
     print("\n[4/5] Building Healthy Memory Bank...")
     t0 = time.time()
     memory_bank = build_memory_bank(model, train_healthy_ds)
+    exec_time = time.time() - t0
 
     # VALIDATION (Per trovare le soglie)
     print("\n[5/5] Scoring datasets via K-Nearest Neighbors...")
@@ -731,7 +732,6 @@ def run_patchcore_experiment():
     # TEST
     print("  Evaluating Test Set...")
     test_img_scores, test_maps, test_masks, test_labels, test_pids = evaluate_patchcore(model, memory_bank, test_ds)
-    exec_time = time.time() - t0
     save_image_results(test_pids, test_labels, test_img_scores, OUT_DIR)
 
     # METRICS

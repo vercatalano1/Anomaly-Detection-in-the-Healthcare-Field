@@ -6,7 +6,7 @@ Backbone: ResNet-18 (ImageNet Pretrained)
 Layers extracted: layer1, layer2
 Memory Bank Size: 45824 patches (Subsampling: 5.0%)
 Gaussian Blur Sigma: 2.0
-Execution time: 377.69s
+Execution time: 42.83s
 
 IMAGE-LEVEL RESULTS
 ----------------------------------------------------------------------
