@@ -181,7 +181,7 @@ def plot_computational_cost(plot_df):
 
     for bar, t in zip(bars, times):
         if pd.notna(t):
-            text = f"{t/60:.1f} min" if t > 60 else f"{t:.1f} s"
+            text = f"{t:.1f} s"
             ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() * 1.1, text, 
                     ha='center', va='bottom', fontweight='bold', color='#333333')
 
