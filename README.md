@@ -281,8 +281,8 @@ Tutti i valori riportati nei risultati vengono estratti automaticamente mediante
 | Modello          |  Img AUROC |     Img AP |     Img F1 |  Img Sens. |  Img Spec. | Pixel AUROC | Pixel Dice |     Tempo |
 | ---------------- | ---------: | ---------: | ---------: | ---------: | ---------: | ----------: | ---------: | --------: |
 | Isolation Forest |     0.6704 |     0.7935 |     0.4892 |     0.3475 |     0.8273 |           — |          — | **1.4 s** |
-| CNN Autoencoder  |     0.7994 |     0.9021 |     0.5469 |     0.3860 |     0.9396 |      0.9086 |     0.3753 | 2098.23 s |
-| **PatchCore**    | **0.9037** | **0.9590** | **0.7751** | **0.6458** | **0.9517** |  **0.9561** | **0.4414** |  377.69 s |
+| CNN Autoencoder  |     0.7994 |     0.9021 |     0.5469 |     0.3860 |     0.9396 |      0.9086 |     0.3753 | 2098.2 s |
+| **PatchCore**    | **0.9037** | **0.9590** | **0.7751** | **0.6458** | **0.9517** |  **0.9561** | **0.4414** |  42.83 s |
 
 I risultati mostrano differenze tra i tre approcci sia in termini di capacità discriminativa a livello immagine sia, per i modelli che producono mappe spaziali, in termini di localizzazione pixel-level.
 
@@ -496,9 +496,6 @@ La rimozione delle componenti connesse di area inferiore a `min_size = 20` può 
 
 Questo rappresenta un limite della procedura di post-processing e deve essere distinto dalla capacità del modello di generare la anomaly map continua.
 
-### Rappresentazione delle maschere
-
-Le maschere tumorali vengono utilizzate come maschere binarie per la valutazione pixel-level. La pipeline distingue quindi tra pixel appartenenti alla regione annotata e pixel appartenenti al background, senza preservare eventuali differenti sottoregioni presenti nell'annotazione originale.
 
 ### Generalizzazione
 
@@ -528,6 +525,3 @@ Un'analisi sistematica delle soglie pixel-level potrebbe valutare l'andamento de
 
 Un'ulteriore direzione consiste nella validazione su coorti esterne, ad esempio altri dataset BraTS o dataset relativi ad altre patologie oncologiche cerebrali, al fine di valutare la capacità di generalizzazione dei modelli al di fuori della distribuzione utilizzata nello studio.
 
-### Analisi per dimensione della lesione
-
-Sarebbe inoltre possibile analizzare separatamente le prestazioni di localizzazione in funzione dell'area della lesione, per verificare quantitativamente l'impatto della dimensione della regione patologica sulle prestazioni pixel-level dei diversi modelli.
